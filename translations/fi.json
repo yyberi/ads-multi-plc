@@ -1,0 +1,65 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Lisää Beckhoff PLC",
+        "description": "Syötä PLC:n yhteystiedot. AMS Net ID löytyy TwinCAT System Managerista.",
+        "data": {
+          "plc_name": "PLC:n nimi",
+          "ams_net_id": "AMS Net ID (esim. {example_ams})",
+          "ip_address": "IP-osoite (esim. {example_ip})",
+          "ip_port": "ADS-portti"
+        }
+      },
+      "variables": {
+        "title": "Lisää PLC-muuttujia",
+        "description": "PLC: {plc_name} | Lisätty: {added_count} muuttujaa ({added_list}). Lisää muuttuja tai paina 'Valmis'.",
+        "data": {
+          "name": "Muuttujan nimi (esim. MAIN.bPumppiKaytossa)",
+          "type": "Tyyppi",
+          "friendly_name": "Näyttönimi (vapaaehtoinen)",
+          "unit": "Yksikkö (vapaaehtoinen, esim. °C)",
+          "device_class": "Device class (vapaaehtoinen)",
+          "writable": "Kirjoitettava (switch/number)",
+          "finish": "Valmis – ei lisää muuttujia"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Yhteys PLC:hen epäonnistui. Tarkista IP-osoite ja AMS Net ID.",
+      "invalid_ams_net_id": "Virheellinen AMS Net ID -formaatti. Oikea muoto: x.x.x.x.x.x",
+      "already_configured": "Tämä PLC (AMS Net ID) on jo lisätty.",
+      "variable_exists": "Samanniminen muuttuja on jo olemassa."
+    },
+    "abort": {
+      "already_configured": "PLC on jo konfiguroitu."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Hallinnoi muuttujia"
+      },
+      "add_variable": {
+        "title": "Lisää muuttuja",
+        "data": {
+          "name": "Muuttujan nimi",
+          "type": "Tyyppi",
+          "friendly_name": "Näyttönimi",
+          "unit": "Yksikkö",
+          "device_class": "Device class",
+          "writable": "Kirjoitettava"
+        }
+      },
+      "remove_variable": {
+        "title": "Poista muuttuja",
+        "data": {
+          "variable_name": "Poistettava muuttuja"
+        }
+      }
+    },
+    "error": {
+      "variable_exists": "Samanniminen muuttuja on jo olemassa."
+    }
+  }
+}

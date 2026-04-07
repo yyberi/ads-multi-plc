@@ -1,0 +1,12 @@
+{
+  "domain": "ads_multi",
+  "name": "Beckhoff ADS (Multi-PLC)",
+  "version": "1.0.0",
+  "documentation": "https://github.com/your-repo/ads-multi",
+  "requirements": ["pyads>=3.3.9"],
+  "dependencies": [],
+  "codeowners": [],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "quality_scale": "custom"
+}

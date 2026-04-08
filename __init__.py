@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 from datetime import timedelta
 from typing import Any
 
@@ -24,12 +25,34 @@ from .const import (
     CONF_IP_PORT,
     CONF_PLC_NAME,
     CONF_VARIABLES,
+    CONF_ENABLE_ROUTE,
+    CONF_SENDER_AMS,
+    CONF_ROUTE_USERNAME,
+    CONF_ROUTE_PASSWORD,
+    CONF_ROUTE_NAME,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     PLATFORMS,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _resolve_sender_ams(target_ip: str) -> str:
+    """Muodosta lähettäjän AMS Net ID paikallisen lähde-IP:n perusteella."""
+    local_ip = target_ip
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect((target_ip, 1))
+            local_ip = sock.getsockname()[0]
+    except OSError as err:
+        _LOGGER.warning(
+            "Paikallisen IP-osoitteen päätteleminen epäonnistui kohteelle %s: %s. "
+            "Käytetään fallbackia.",
+            target_ip,
+            err,
+        )
+    return f"{local_ip}.1.1"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -47,10 +70,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # siitä onko ne lisätty config flow'ssa vai options flow'ssa
     variables = entry.options.get(CONF_VARIABLES) or entry.data.get(CONF_VARIABLES, [])
 
+    # Kerää route-konfiguraatio (prioriteetti: options > data)
+    route_config = {
+        CONF_ENABLE_ROUTE: entry.options.get(CONF_ENABLE_ROUTE,
+                                              entry.data.get(CONF_ENABLE_ROUTE, False)),
+        CONF_SENDER_AMS: entry.options.get(CONF_SENDER_AMS,
+                                            entry.data.get(CONF_SENDER_AMS))
+                         or _resolve_sender_ams(ip_address),
+        CONF_ROUTE_NAME: entry.options.get(CONF_ROUTE_NAME,
+                                            entry.data.get(CONF_ROUTE_NAME, "")),
+        CONF_ROUTE_USERNAME: entry.options.get(CONF_ROUTE_USERNAME,
+                                               entry.data.get(CONF_ROUTE_USERNAME, "")),
+        CONF_ROUTE_PASSWORD: entry.options.get(CONF_ROUTE_PASSWORD,
+                                               entry.data.get(CONF_ROUTE_PASSWORD, "")),
+    }
+
     # Luo ADS-yhteys (pyads) ajasäikeisesti
     try:
         plc = await hass.async_add_executor_job(
-            _create_plc_connection, ams_net_id, ip_address, ip_port
+            _create_plc_connection, ams_net_id, ip_address, ip_port, route_config
         )
     except pyads.ADSError as err:
         raise ConfigEntryNotReady(
@@ -101,11 +139,82 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _create_plc_connection(
-    ams_net_id: str, ip_address: str, ip_port: int
+    ams_net_id: str,
+    ip_address: str,
+    ip_port: int,
+    route_config: dict[str, Any] | None = None,
 ) -> pyads.Connection:
-    """Luo ja avaa ADS-yhteys (synkroninen, ajetaan executor-säikeessä)."""
+    """Luo ja avaa ADS-yhteys, optionaalisesti lisäämällä reitin."""
+    _LOGGER.debug("_create_plc_connection aloitettu: ams_net_id=%s, ip=%s:%s",
+                  ams_net_id, ip_address, ip_port)
+    _LOGGER.debug("route_config: %s", route_config)
+
+    # Lisää reitti jos konfiguroitu
+    if route_config and route_config.get(CONF_ENABLE_ROUTE):
+        _LOGGER.info("Route-lisääminen aktivoitu")
+        try:
+            sender_ams = route_config[CONF_SENDER_AMS]
+            route_name = route_config.get(CONF_ROUTE_NAME) or f"HA-{ams_net_id}"
+            username = route_config.get(CONF_ROUTE_USERNAME) or ""
+            password = route_config.get(CONF_ROUTE_PASSWORD) or ""
+
+            _LOGGER.debug("Route parametrit: sender_ams=%s, target_ams=%s, route_name=%s, username=%s",
+                         sender_ams, ams_net_id, route_name, username)
+
+            # Avaa portti route-lisäämistä varten
+            _LOGGER.debug("Avataan pyads portti...")
+            pyads.open_port()
+            _LOGGER.debug("Portti avattu")
+
+            try:
+                _LOGGER.debug("Asetetaan local address: %s", sender_ams)
+                pyads.set_local_address(sender_ams)
+                _LOGGER.debug("Local address asetettu")
+
+                # Käytä positioargumentteja kuten pyAdsTest:ssa
+                _LOGGER.info("Lisätään route: sender=%s, target=%s, ip=%s, port=%s",
+                            sender_ams, ams_net_id, ip_address, ip_port)
+                pyads.add_route_to_plc(
+                    sender_ams,
+                    ip_address,
+                    ip_address,
+                    username,
+                    password,
+                    route_name=route_name,
+                )
+                _LOGGER.info(
+                    "Reitti '%s' lisätty onnistuneesti: %s -> %s",
+                    route_name, sender_ams, ams_net_id,
+                )
+            except Exception as err:
+                _LOGGER.error("Virhe route-lisäyksessä: %s", err, exc_info=True)
+                raise
+            finally:
+                _LOGGER.debug("Suljetaan pyads portti...")
+                pyads.close_port()
+                _LOGGER.debug("Portti suljettu")
+        except pyads.ADSError as err:
+            # Varoita, mutta älä estä yhteyttä
+            _LOGGER.warning(
+                "Route-lisääminen epäonnistui (%s): %s. "
+                "Yritetään muodostaa yhteys silti.",
+                ams_net_id, err,
+            )
+        except Exception as err:
+            # Muut virheet
+            _LOGGER.error(
+                "Route-lisääminen epäonnistui odottamattomalla virheellä (%s): %s",
+                ams_net_id, err, exc_info=True
+            )
+    else:
+        _LOGGER.debug("Route-lisääminen ei aktivoitu (enable_route=%s)",
+                     route_config.get(CONF_ENABLE_ROUTE) if route_config else None)
+
+    # Avaa yhteys normaalisti
+    _LOGGER.debug("Avataan PLC-yhteys: %s (%s:%s)", ams_net_id, ip_address, ip_port)
     plc = pyads.Connection(ams_net_id, ip_port, ip_address)
     plc.open()
+    _LOGGER.info("PLC-yhteys avattu onnistuneesti: %s", ams_net_id)
     return plc
 
 

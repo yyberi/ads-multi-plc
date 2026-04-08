@@ -9,6 +9,13 @@ CONF_IP_PORT = "ip_port"
 CONF_PLC_NAME = "plc_name"
 CONF_VARIABLES = "variables"
 
+# Route-konfiguraatio
+CONF_ENABLE_ROUTE = "enable_route_config"
+CONF_SENDER_AMS = "sender_ams"
+CONF_ROUTE_USERNAME = "route_username"
+CONF_ROUTE_PASSWORD = "route_password"
+CONF_ROUTE_NAME = "route_name"
+
 # Oletusarvot
 DEFAULT_PORT = 851
 DEFAULT_UPDATE_INTERVAL = 30  # sekuntia

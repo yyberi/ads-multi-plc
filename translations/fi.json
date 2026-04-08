@@ -8,7 +8,11 @@
           "plc_name": "PLC:n nimi",
           "ams_net_id": "AMS Net ID (esim. {example_ams})",
           "ip_address": "IP-osoite (esim. {example_ip})",
-          "ip_port": "ADS-portti"
+          "ip_port": "ADS-portti",
+          "enable_route_config": "Lisää ADS-reitti automaattisesti",
+          "route_name": "Reitin nimi (vapaaehtoinen)",
+          "route_username": "PLC:n käyttäjänimi route-lisäämistä varten (vapaaehtoinen)",
+          "route_password": "PLC:n salasana route-lisäämistä varten (vapaaehtoinen)"
         }
       },
       "variables": {
@@ -29,7 +33,8 @@
       "cannot_connect": "Yhteys PLC:hen epäonnistui. Tarkista IP-osoite ja AMS Net ID.",
       "invalid_ams_net_id": "Virheellinen AMS Net ID -formaatti. Oikea muoto: x.x.x.x.x.x",
       "already_configured": "Tämä PLC (AMS Net ID) on jo lisätty.",
-      "variable_exists": "Samanniminen muuttuja on jo olemassa."
+      "variable_exists": "Samanniminen muuttuja on jo olemassa.",
+      "password_without_username": "Salasana vaatii käyttäjänimen."
     },
     "abort": {
       "already_configured": "PLC on jo konfiguroitu."
@@ -56,10 +61,21 @@
         "data": {
           "variable_name": "Poistettava muuttuja"
         }
+      },
+      "manage_route": {
+        "title": "Muokkaa route-konfiguraatiota",
+        "description": "Nykyiset asetukset: {current_settings}",
+        "data": {
+          "enable_route_config": "Lisää reitti automaattisesti",
+          "route_name": "Reitin nimi",
+          "route_username": "PLC:n käyttäjänimi",
+          "route_password": "PLC:n salasana"
+        }
       }
     },
     "error": {
-      "variable_exists": "Samanniminen muuttuja on jo olemassa."
+      "variable_exists": "Samanniminen muuttuja on jo olemassa.",
+      "password_without_username": "Salasana vaatii käyttäjänimen."
     }
   }
 }

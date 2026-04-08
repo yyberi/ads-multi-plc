@@ -36,6 +36,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Alusta yksi PLC-yhteys config entrystä."""
     hass.data.setdefault(DOMAIN, {})
 
+    # Rekisteröi reload-listener heti – ennen mahdollisia virheitä
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
     plc_name = entry.data[CONF_PLC_NAME]
     ams_net_id = entry.data[CONF_AMS_NET_ID]
     ip_address = entry.data[CONF_IP_ADDRESS]
@@ -76,9 +79,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # Lataa integraatio uudelleen automaattisesti kun options muuttuvat
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
 

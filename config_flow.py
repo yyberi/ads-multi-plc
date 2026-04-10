@@ -15,18 +15,29 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_AMS_NET_ID,
+    CONF_DEVICE_PROFILES,
     CONF_IP_ADDRESS,
     CONF_IP_PORT,
     CONF_PLC_NAME,
+    CONF_PROFILE_TYPE,
     CONF_VARIABLES,
     CONF_ENABLE_ROUTE,
     CONF_SENDER_AMS,
     CONF_ROUTE_USERNAME,
     CONF_ROUTE_PASSWORD,
     CONF_ROUTE_NAME,
+    LIGHT_KEY_BRIGHTNESS,
+    LIGHT_KEY_COLOR_TEMP,
+    LIGHT_KEY_ON_OFF,
     DEFAULT_PORT,
     DOMAIN,
+    PROFILE_KEY_MAX,
+    PROFILE_KEY_MIN,
+    PROFILE_KEY_NAME,
+    PROFILE_KEY_TYPE,
+    PROFILE_TYPE_LIGHT,
 )
+from .entity_profiles import normalize_profiles
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +72,24 @@ VARIABLE_SCHEMA = vol.Schema(
         vol.Optional("unit", default=""): str,
         vol.Optional("device_class", default=""): str,
         vol.Optional("writable", default=False): bool,
+    }
+)
+
+LIGHT_NUMERIC_TYPES = ["BYTE", "WORD", "DWORD", "INT", "DINT", "REAL", "LREAL"]
+
+LIGHT_PROFILE_SCHEMA = vol.Schema(
+    {
+        vol.Required("profile_name"): str,
+        vol.Required("on_off_symbol"): str,
+        vol.Optional("on_off_type", default="BOOL"): vol.In(["BOOL"]),
+        vol.Optional("brightness_symbol", default=""): str,
+        vol.Optional("brightness_type", default="INT"): vol.In(LIGHT_NUMERIC_TYPES),
+        vol.Optional("brightness_min", default=0): vol.Coerce(float),
+        vol.Optional("brightness_max", default=100): vol.Coerce(float),
+        vol.Optional("color_temp_symbol", default=""): str,
+        vol.Optional("color_temp_type", default="INT"): vol.In(LIGHT_NUMERIC_TYPES),
+        vol.Optional("color_temp_min", default=2700): vol.Coerce(float),
+        vol.Optional("color_temp_max", default=6500): vol.Coerce(float),
     }
 )
 
@@ -101,6 +130,7 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Alusta."""
         self._plc_data: dict[str, Any] = {}
         self._variables: list[dict[str, Any]] = []
+        self._device_profiles: list[dict[str, Any]] = []
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -140,13 +170,19 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     await self.async_set_unique_id(user_input[CONF_AMS_NET_ID])
                     self._abort_if_unique_id_configured()
 
-                    # Tallenna kaikki parametrit (mukaan lukien route)
-                    self._plc_data = user_input
-                    self._plc_data[CONF_SENDER_AMS] = sender_ams
-                    # Siivoa route-parametrit
-                    self._plc_data[CONF_ROUTE_USERNAME] = username
-                    self._plc_data[CONF_ROUTE_PASSWORD] = password
-                    return await self.async_step_variables()
+                    # Luo entry heti ilman pakollista muuttujan lisäystä.
+                    plc_data = dict(user_input)
+                    plc_data[CONF_SENDER_AMS] = sender_ams
+                    plc_data[CONF_ROUTE_USERNAME] = username
+                    plc_data[CONF_ROUTE_PASSWORD] = password
+                    return self.async_create_entry(
+                        title=plc_data[CONF_PLC_NAME],
+                        data={
+                            **plc_data,
+                            CONF_VARIABLES: [],
+                            CONF_DEVICE_PROFILES: [],
+                        },
+                    )
 
         return self.async_show_form(
             step_id="user",
@@ -209,6 +245,7 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data={
                 **self._plc_data,
                 CONF_VARIABLES: self._variables,
+                CONF_DEVICE_PROFILES: self._device_profiles,
             },
         )
 
@@ -232,6 +269,11 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 self.config_entry.options.get(CONF_VARIABLES)
                 or self.config_entry.data.get(CONF_VARIABLES, [])
             )
+        if not hasattr(self, "_device_profiles"):
+            self._device_profiles = normalize_profiles(
+                self.config_entry.options.get(CONF_DEVICE_PROFILES)
+                or self.config_entry.data.get(CONF_DEVICE_PROFILES, [])
+            )
 
         if user_input is not None:
             action = user_input.get("action", "finish")
@@ -239,11 +281,22 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_add_variable()
             if action == "remove":
                 return await self.async_step_remove_variable()
+            if action == "add_light":
+                return await self.async_step_add_light()
+            if action == "edit_light":
+                return await self.async_step_edit_light_select()
+            if action == "remove_light":
+                return await self.async_step_remove_light()
             if action == "manage_route":
                 return await self.async_step_manage_route()
             return await self._save_and_finish()
 
         names = ", ".join(v["name"] for v in self._variables) or "–"
+        lights = ", ".join(
+            p.get(PROFILE_KEY_NAME, "")
+            for p in self._device_profiles
+            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+        ) or "–"
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -252,13 +305,16 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                         {
                             "add": "Lisää muuttuja",
                             "remove": "Poista muuttuja",
+                            "add_light": "Lisää valo",
+                            "edit_light": "Muokkaa valoa",
+                            "remove_light": "Poista valo",
                             "manage_route": "Muokkaa route-konfiguraatiota",
                             "finish": "Tallenna ja sulje",
                         }
                     )
                 }
             ),
-            description_placeholders={"variables": names},
+            description_placeholders={"variables": names, "lights": lights},
         )
 
     async def async_step_manage_route(
@@ -284,6 +340,7 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                     title="",
                     data={
                         CONF_VARIABLES: self._variables,
+                        CONF_DEVICE_PROFILES: self._device_profiles,
                         CONF_ENABLE_ROUTE: user_input.get(CONF_ENABLE_ROUTE, False),
                         CONF_ROUTE_NAME: user_input.get(CONF_ROUTE_NAME, ""),
                         CONF_ROUTE_USERNAME: username,
@@ -355,12 +412,130 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
             ),
         )
 
+    async def async_step_add_light(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Lisää uusi light-profiili."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            errors, profile = self._validate_and_build_light_profile(user_input)
+            if not errors and profile is not None:
+                self._device_profiles.append(profile)
+                return await self._save_and_finish()
+
+        return self.async_show_form(
+            step_id="add_light",
+            data_schema=LIGHT_PROFILE_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_edit_light_select(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Valitse muokattava light-profiili."""
+        light_names = [
+            str(p.get(PROFILE_KEY_NAME))
+            for p in self._device_profiles
+            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT and p.get(PROFILE_KEY_NAME)
+        ]
+        if not light_names:
+            return await self.async_step_init()
+
+        if user_input is not None:
+            self._edit_light_original_name = user_input.get("light_name")
+            return await self.async_step_edit_light()
+
+        return self.async_show_form(
+            step_id="edit_light_select",
+            data_schema=vol.Schema({vol.Required("light_name"): vol.In(light_names)}),
+        )
+
+    async def async_step_edit_light(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Muokkaa olemassa olevaa light-profiilia."""
+        original_name = getattr(self, "_edit_light_original_name", None)
+        if not original_name:
+            return await self.async_step_init()
+
+        profile = self._find_light_profile(original_name)
+        if profile is None:
+            return await self.async_step_init()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors, updated_profile = self._validate_and_build_light_profile(
+                user_input,
+                current_name=original_name,
+            )
+            if not errors and updated_profile is not None:
+                for idx, current in enumerate(self._device_profiles):
+                    if (
+                        current.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+                        and current.get(PROFILE_KEY_NAME) == original_name
+                    ):
+                        self._device_profiles[idx] = updated_profile
+                        break
+                return await self._save_and_finish()
+
+        defaults = self._light_form_defaults(profile)
+        return self.async_show_form(
+            step_id="edit_light",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("profile_name", default=defaults["profile_name"]): str,
+                    vol.Required("on_off_symbol", default=defaults["on_off_symbol"]): str,
+                    vol.Optional("on_off_type", default=defaults["on_off_type"]): vol.In(["BOOL"]),
+                    vol.Optional("brightness_symbol", default=defaults["brightness_symbol"]): str,
+                    vol.Optional("brightness_type", default=defaults["brightness_type"]): vol.In(LIGHT_NUMERIC_TYPES),
+                    vol.Optional("brightness_min", default=defaults["brightness_min"]): vol.Coerce(float),
+                    vol.Optional("brightness_max", default=defaults["brightness_max"]): vol.Coerce(float),
+                    vol.Optional("color_temp_symbol", default=defaults["color_temp_symbol"]): str,
+                    vol.Optional("color_temp_type", default=defaults["color_temp_type"]): vol.In(LIGHT_NUMERIC_TYPES),
+                    vol.Optional("color_temp_min", default=defaults["color_temp_min"]): vol.Coerce(float),
+                    vol.Optional("color_temp_max", default=defaults["color_temp_max"]): vol.Coerce(float),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_remove_light(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Poista light-profiili."""
+        light_names = [
+            str(p.get(PROFILE_KEY_NAME))
+            for p in self._device_profiles
+            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT and p.get(PROFILE_KEY_NAME)
+        ]
+        if not light_names:
+            return await self._save_and_finish()
+
+        if user_input is not None:
+            profile_name = user_input.get("light_name")
+            self._device_profiles = [
+                p
+                for p in self._device_profiles
+                if not (
+                    p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+                    and p.get(PROFILE_KEY_NAME) == profile_name
+                )
+            ]
+            return await self._save_and_finish()
+
+        return self.async_show_form(
+            step_id="remove_light",
+            data_schema=vol.Schema({vol.Required("light_name"): vol.In(light_names)}),
+        )
+
     async def _save_and_finish(self) -> FlowResult:
         """Tallenna päivitetyt muuttujat options-kenttään."""
         return self.async_create_entry(
             title="",
             data={
                 CONF_VARIABLES: self._variables,
+                CONF_DEVICE_PROFILES: self._device_profiles,
                 CONF_ENABLE_ROUTE: self.config_entry.options.get(
                     CONF_ENABLE_ROUTE,
                     self.config_entry.data.get(CONF_ENABLE_ROUTE, False),
@@ -384,6 +559,103 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 ),
             },
         )
+
+    def _find_light_profile(self, name: str) -> dict[str, Any] | None:
+        """Hae light-profiili nimen perusteella."""
+        for profile in self._device_profiles:
+            if (
+                profile.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+                and profile.get(PROFILE_KEY_NAME) == name
+            ):
+                return profile
+        return None
+
+    @staticmethod
+    def _light_form_defaults(profile: dict[str, Any]) -> dict[str, Any]:
+        """Muodosta oletusarvot light-lomakkeelle profiilista."""
+        on_off = profile.get(LIGHT_KEY_ON_OFF, {})
+        brightness = profile.get(LIGHT_KEY_BRIGHTNESS, {})
+        color_temp = profile.get(LIGHT_KEY_COLOR_TEMP, {})
+        return {
+            "profile_name": profile.get(PROFILE_KEY_NAME, ""),
+            "on_off_symbol": on_off.get(PROFILE_KEY_NAME, ""),
+            "on_off_type": on_off.get(PROFILE_KEY_TYPE, "BOOL"),
+            "brightness_symbol": brightness.get(PROFILE_KEY_NAME, ""),
+            "brightness_type": brightness.get(PROFILE_KEY_TYPE, "INT"),
+            "brightness_min": brightness.get(PROFILE_KEY_MIN, 0),
+            "brightness_max": brightness.get(PROFILE_KEY_MAX, 100),
+            "color_temp_symbol": color_temp.get(PROFILE_KEY_NAME, ""),
+            "color_temp_type": color_temp.get(PROFILE_KEY_TYPE, "INT"),
+            "color_temp_min": color_temp.get(PROFILE_KEY_MIN, 2700),
+            "color_temp_max": color_temp.get(PROFILE_KEY_MAX, 6500),
+        }
+
+    def _validate_and_build_light_profile(
+        self,
+        user_input: dict[str, Any],
+        current_name: str | None = None,
+    ) -> tuple[dict[str, str], dict[str, Any] | None]:
+        """Validoi light-lomake ja rakenna profiili."""
+        errors: dict[str, str] = {}
+
+        profile_name = user_input["profile_name"].strip()
+        on_off_symbol = user_input["on_off_symbol"].strip()
+        if not profile_name:
+            errors["profile_name"] = "light_name_required"
+            return errors, None
+        if not on_off_symbol:
+            errors["on_off_symbol"] = "light_on_off_required"
+            return errors, None
+
+        existing = {
+            p.get(PROFILE_KEY_NAME, "").strip().lower()
+            for p in self._device_profiles
+            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+        }
+        if current_name:
+            existing.discard(current_name.strip().lower())
+
+        if profile_name.lower() in existing:
+            errors["profile_name"] = "light_exists"
+            return errors, None
+
+        brightness_symbol = user_input.get("brightness_symbol", "").strip()
+        color_temp_symbol = user_input.get("color_temp_symbol", "").strip()
+        brightness_min = float(user_input.get("brightness_min", 0))
+        brightness_max = float(user_input.get("brightness_max", 100))
+        color_temp_min = float(user_input.get("color_temp_min", 2700))
+        color_temp_max = float(user_input.get("color_temp_max", 6500))
+
+        if brightness_symbol and brightness_max <= brightness_min:
+            errors["brightness_max"] = "invalid_range"
+            return errors, None
+        if color_temp_symbol and color_temp_max <= color_temp_min:
+            errors["color_temp_max"] = "invalid_range"
+            return errors, None
+
+        profile = {
+            CONF_PROFILE_TYPE: PROFILE_TYPE_LIGHT,
+            PROFILE_KEY_NAME: profile_name,
+            LIGHT_KEY_ON_OFF: {
+                PROFILE_KEY_NAME: on_off_symbol,
+                PROFILE_KEY_TYPE: user_input.get("on_off_type", "BOOL"),
+            },
+        }
+        if brightness_symbol:
+            profile[LIGHT_KEY_BRIGHTNESS] = {
+                PROFILE_KEY_NAME: brightness_symbol,
+                PROFILE_KEY_TYPE: user_input.get("brightness_type", "INT"),
+                PROFILE_KEY_MIN: brightness_min,
+                PROFILE_KEY_MAX: brightness_max,
+            }
+        if color_temp_symbol:
+            profile[LIGHT_KEY_COLOR_TEMP] = {
+                PROFILE_KEY_NAME: color_temp_symbol,
+                PROFILE_KEY_TYPE: user_input.get("color_temp_type", "INT"),
+                PROFILE_KEY_MIN: color_temp_min,
+                PROFILE_KEY_MAX: color_temp_max,
+            }
+        return errors, profile
 
 
 def _test_connection(

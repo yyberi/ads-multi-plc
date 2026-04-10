@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     CONF_AMS_NET_ID,
+    CONF_DEVICE_PROFILES,
     CONF_IP_ADDRESS,
     CONF_IP_PORT,
     CONF_PLC_NAME,
@@ -34,6 +35,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .entity_profiles import collect_profile_points, normalize_profiles
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +71,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Muuttujat voivat olla joko options- tai data-kentässä riippuen
     # siitä onko ne lisätty config flow'ssa vai options flow'ssa
     variables = entry.options.get(CONF_VARIABLES) or entry.data.get(CONF_VARIABLES, [])
+    device_profiles = normalize_profiles(
+        entry.options.get(CONF_DEVICE_PROFILES, entry.data.get(CONF_DEVICE_PROFILES, []))
+    )
 
     # Kerää route-konfiguraatio (prioriteetti: options > data)
     route_config = {
@@ -102,6 +107,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         plc_name=plc_name,
         ams_net_id=ams_net_id,
         variables=variables,
+        device_profiles=device_profiles,
         update_interval=timedelta(seconds=DEFAULT_UPDATE_INTERVAL),
     )
 
@@ -114,6 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "plc_name": plc_name,
         "ams_net_id": ams_net_id,
         "variables": variables,
+        "device_profiles": device_profiles,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -232,6 +239,7 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
         plc_name: str,
         ams_net_id: str,
         variables: list[dict[str, Any]],
+        device_profiles: list[dict[str, Any]],
         update_interval: timedelta,
     ) -> None:
         """Alusta koordinaattori."""
@@ -245,6 +253,8 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
         self.plc_name = plc_name
         self.ams_net_id = ams_net_id
         self.variables = variables  # lista: [{name, type, friendly_name, ...}, ...]
+        self.device_profiles = device_profiles
+        self.read_points = self._build_read_points(variables, device_profiles)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Lue kaikki muuttujat PLC:ltä. Kutsutaan automaattisesti koordinaattorin toimesta."""
@@ -258,9 +268,9 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
     def _read_all_variables(self) -> dict[str, Any]:
         """Synkroninen muuttujien luku (ajetaan executor-säikeessä)."""
         data: dict[str, Any] = {}
-        for var in self.variables:
-            var_name: str = var["name"]
-            var_type: str = var["type"]
+        for point in self.read_points:
+            var_name: str = point["name"]
+            var_type: str = point["type"]
             try:
                 value = self.plc.read_by_name(var_name, self._ads_type(var_type))
                 data[var_name] = value
@@ -277,6 +287,35 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
                 else:
                     data[var_name] = None
         return data
+
+    @staticmethod
+    def _build_read_points(
+        variables: list[dict[str, Any]],
+        device_profiles: list[dict[str, Any]],
+    ) -> list[dict[str, str]]:
+        """Yhdistä luettavat pointit muuttujista ja profiileista."""
+        points: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+
+        for var in variables:
+            name = str(var.get("name", ""))
+            var_type = str(var.get("type", "")).upper()
+            if not name or not var_type:
+                continue
+            key = (name, var_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            points.append({"name": name, "type": var_type})
+
+        for point in collect_profile_points(device_profiles):
+            key = (point["name"], point["type"])
+            if key in seen:
+                continue
+            seen.add(key)
+            points.append(point)
+
+        return points
 
     def write_variable(self, var_name: str, var_type: str, value: Any) -> None:
         """Kirjoita arvo PLC:lle (kutsuttava async_add_executor_job kautta)."""

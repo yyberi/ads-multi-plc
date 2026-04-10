@@ -43,7 +43,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "Hallinnoi muuttujia"
+        "title": "Hallinnoi muuttujia ja laitteita",
+        "description": "Muuttujat: {variables} | Valot: {lights}"
       },
       "add_variable": {
         "title": "Lisää muuttuja",
@@ -71,11 +72,59 @@
           "route_username": "PLC:n käyttäjänimi",
           "route_password": "PLC:n salasana"
         }
+      },
+      "add_light": {
+        "title": "Lisää valo",
+        "data": {
+          "profile_name": "Valon nimi",
+          "on_off_symbol": "On/off ADS-symboli",
+          "on_off_type": "On/off tyyppi",
+          "brightness_symbol": "Himmennys ADS-symboli (valinnainen)",
+          "brightness_type": "Himmennyksen tyyppi",
+          "brightness_min": "Himmennyksen minimiarvo",
+          "brightness_max": "Himmennyksen maksimiarvo",
+          "color_temp_symbol": "Valolämpötilan ADS-symboli (valinnainen)",
+          "color_temp_type": "Valolämpötilan tyyppi",
+          "color_temp_min": "Valolämpötilan minimi (K)",
+          "color_temp_max": "Valolämpötilan maksimi (K)"
+        }
+      },
+      "edit_light_select": {
+        "title": "Valitse muokattava valo",
+        "data": {
+          "light_name": "Valo"
+        }
+      },
+      "edit_light": {
+        "title": "Muokkaa valoa",
+        "data": {
+          "profile_name": "Valon nimi",
+          "on_off_symbol": "On/off ADS-symboli",
+          "on_off_type": "On/off tyyppi",
+          "brightness_symbol": "Himmennys ADS-symboli (valinnainen)",
+          "brightness_type": "Himmennyksen tyyppi",
+          "brightness_min": "Himmennyksen minimiarvo",
+          "brightness_max": "Himmennyksen maksimiarvo",
+          "color_temp_symbol": "Valolämpötilan ADS-symboli (valinnainen)",
+          "color_temp_type": "Valolämpötilan tyyppi",
+          "color_temp_min": "Valolämpötilan minimi (K)",
+          "color_temp_max": "Valolämpötilan maksimi (K)"
+        }
+      },
+      "remove_light": {
+        "title": "Poista valo",
+        "data": {
+          "light_name": "Poistettava valo"
+        }
       }
     },
     "error": {
       "variable_exists": "Samanniminen muuttuja on jo olemassa.",
-      "password_without_username": "Salasana vaatii käyttäjänimen."
+      "password_without_username": "Salasana vaatii käyttäjänimen.",
+      "light_exists": "Samanniminen valo on jo olemassa.",
+      "invalid_range": "Maksimiarvon pitää olla suurempi kuin minimiarvo.",
+      "light_name_required": "Valon nimi on pakollinen.",
+      "light_on_off_required": "On/off ADS-symboli on pakollinen."
     }
   }
 }

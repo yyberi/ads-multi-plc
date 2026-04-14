@@ -6,11 +6,21 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ATTR_AMS_NET_ID, ATTR_PLC_NAME, ATTR_VAR_NAME, ATTR_VAR_TYPE, DOMAIN
+from .const import (
+    ATTR_ADS_PORT,
+    ATTR_AMS_NET_ID,
+    ATTR_CURRENT_IP_ADDRESS,
+    ATTR_PLC_IP_ADDRESS,
+    ATTR_PLC_NAME,
+    ATTR_PYADS_VERSION,
+    ATTR_VAR_NAME,
+    ATTR_VAR_TYPE,
+    DOMAIN,
+)
 from . import AdsPlcCoordinator
 
 # Muuttujatyypit jotka kuuluvat sensor-platformille (ei BOOL → binary_sensor)
@@ -26,12 +36,25 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator: AdsPlcCoordinator = data["coordinator"]
     variables: list[dict[str, Any]] = data["variables"]
+    device_info = DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=coordinator.plc_name,
+        manufacturer="Beckhoff",
+        model=f"TwinCAT PLC ({data.get('ip_address', 'unknown')})",
+        sw_version=f"pyads {data.get('pyads_version', 'unknown')}",
+    )
 
     entities = [
-        AdsPlcSensor(coordinator, var, entry)
+        AdsPlcSensor(coordinator, var, entry, device_info)
         for var in variables
         if var["type"].upper() in SENSOR_TYPES
     ]
+    entities.extend(
+        [
+            AdsPlcPyadsVersionSensor(coordinator, entry, device_info, data),
+            AdsPlcCurrentIpSensor(coordinator, entry, device_info, data),
+        ]
+    )
     async_add_entities(entities)
 
 
@@ -43,6 +66,7 @@ class AdsPlcSensor(CoordinatorEntity, SensorEntity):
         coordinator: AdsPlcCoordinator,
         variable: dict[str, Any],
         entry: ConfigEntry,
+        device_info: DeviceInfo,
     ) -> None:
         """Alusta."""
         super().__init__(coordinator)
@@ -67,12 +91,7 @@ class AdsPlcSensor(CoordinatorEntity, SensorEntity):
                 pass
 
         # Ryhmitä kaikki saman PLC:n entiteetit samaan laitteeseen
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=plc_name,
-            manufacturer="Beckhoff",
-            model="TwinCAT PLC",
-        )
+        self._attr_device_info = device_info
 
     @property
     def native_value(self):
@@ -89,4 +108,88 @@ class AdsPlcSensor(CoordinatorEntity, SensorEntity):
             ATTR_AMS_NET_ID: self.coordinator.ams_net_id,
             ATTR_VAR_NAME: self._variable["name"],
             ATTR_VAR_TYPE: self._variable["type"],
+        }
+
+
+class AdsPlcPyadsVersionSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostiikkasensori pyads-version näyttämiseen."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:package-variant-closed"
+
+    def __init__(
+        self,
+        coordinator: AdsPlcCoordinator,
+        entry: ConfigEntry,
+        device_info: DeviceInfo,
+        integration_data: dict[str, Any],
+    ) -> None:
+        super().__init__(coordinator)
+        self._data = integration_data
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_pyads_version"
+        self._attr_name = f"{coordinator.plc_name} pyads-versio"
+        self._attr_device_info = device_info
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> str:
+        return str(self._data.get("pyads_version", "unknown"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            ATTR_PLC_NAME: self.coordinator.plc_name,
+            ATTR_AMS_NET_ID: self.coordinator.ams_net_id,
+            ATTR_PLC_IP_ADDRESS: self._data.get("ip_address"),
+            ATTR_CURRENT_IP_ADDRESS: self._data.get("current_ip_address"),
+            ATTR_ADS_PORT: self._data.get("ip_port"),
+            "sender_ams": self._data.get("sender_ams"),
+            "connection_status": "connected"
+            if self.coordinator.last_update_success
+            else "disconnected",
+        }
+
+
+class AdsPlcCurrentIpSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostiikkasensori nykyisen IP-osoitteen näyttämiseen."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:ip-network-outline"
+
+    def __init__(
+        self,
+        coordinator: AdsPlcCoordinator,
+        entry: ConfigEntry,
+        device_info: DeviceInfo,
+        integration_data: dict[str, Any],
+    ) -> None:
+        super().__init__(coordinator)
+        self._data = integration_data
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_current_ip"
+        self._attr_name = f"{coordinator.plc_name} nykyinen IP"
+        self._attr_device_info = device_info
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> str:
+        return str(self._data.get("current_ip_address", "unknown"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            ATTR_PLC_NAME: self.coordinator.plc_name,
+            ATTR_AMS_NET_ID: self.coordinator.ams_net_id,
+            ATTR_PLC_IP_ADDRESS: self._data.get("ip_address"),
+            ATTR_ADS_PORT: self._data.get("ip_port"),
+            ATTR_PYADS_VERSION: self._data.get("pyads_version"),
+            "sender_ams": self._data.get("sender_ams"),
+            "connection_status": "connected"
+            if self.coordinator.last_update_success
+            else "disconnected",
         }

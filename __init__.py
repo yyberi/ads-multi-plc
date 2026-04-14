@@ -5,7 +5,7 @@ omana config entry -merkintänä, ja sille luodaan oma DataUpdateCoordinator.
 """
 from __future__ import annotations
 
-import asyncio
+from importlib.metadata import PackageNotFoundError, version as package_version
 import logging
 import socket
 from datetime import timedelta
@@ -14,7 +14,6 @@ from typing import Any
 import pyads
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -40,8 +39,8 @@ from .entity_profiles import collect_profile_points, normalize_profiles
 _LOGGER = logging.getLogger(__name__)
 
 
-def _resolve_sender_ams(target_ip: str) -> str:
-    """Muodosta lähettäjän AMS Net ID paikallisen lähde-IP:n perusteella."""
+def _resolve_local_ip(target_ip: str) -> str:
+    """Päättele paikallinen lähde-IP, jota käytettäisiin kohde-IP:lle."""
     local_ip = target_ip
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -54,7 +53,23 @@ def _resolve_sender_ams(target_ip: str) -> str:
             target_ip,
             err,
         )
+    return local_ip
+
+
+def _sender_ams_from_ip(local_ip: str) -> str:
+    """Muodosta lähettäjän AMS Net ID annetusta IP-osoitteesta."""
     return f"{local_ip}.1.1"
+
+
+def _get_pyads_version() -> str:
+    """Palauta asennetun pyads-kirjaston versio."""
+    module_version = getattr(pyads, "__version__", None)
+    if module_version:
+        return str(module_version)
+    try:
+        return package_version("pyads")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -68,6 +83,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ams_net_id = entry.data[CONF_AMS_NET_ID]
     ip_address = entry.data[CONF_IP_ADDRESS]
     ip_port = entry.data.get(CONF_IP_PORT, 851)
+    local_ip = _resolve_local_ip(ip_address)
+    sender_ams = (
+        entry.options.get(CONF_SENDER_AMS)
+        or entry.data.get(CONF_SENDER_AMS)
+        or _sender_ams_from_ip(local_ip)
+    )
     # Muuttujat voivat olla joko options- tai data-kentässä riippuen
     # siitä onko ne lisätty config flow'ssa vai options flow'ssa
     variables = entry.options.get(CONF_VARIABLES) or entry.data.get(CONF_VARIABLES, [])
@@ -77,17 +98,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Kerää route-konfiguraatio (prioriteetti: options > data)
     route_config = {
-        CONF_ENABLE_ROUTE: entry.options.get(CONF_ENABLE_ROUTE,
-                                              entry.data.get(CONF_ENABLE_ROUTE, False)),
-        CONF_SENDER_AMS: entry.options.get(CONF_SENDER_AMS,
-                                            entry.data.get(CONF_SENDER_AMS))
-                         or _resolve_sender_ams(ip_address),
-        CONF_ROUTE_NAME: entry.options.get(CONF_ROUTE_NAME,
-                                            entry.data.get(CONF_ROUTE_NAME, "")),
-        CONF_ROUTE_USERNAME: entry.options.get(CONF_ROUTE_USERNAME,
-                                               entry.data.get(CONF_ROUTE_USERNAME, "")),
-        CONF_ROUTE_PASSWORD: entry.options.get(CONF_ROUTE_PASSWORD,
-                                               entry.data.get(CONF_ROUTE_PASSWORD, "")),
+        CONF_ENABLE_ROUTE: entry.options.get(
+            CONF_ENABLE_ROUTE, entry.data.get(CONF_ENABLE_ROUTE, False)
+        ),
+        CONF_SENDER_AMS: sender_ams,
+        CONF_ROUTE_NAME: entry.options.get(CONF_ROUTE_NAME, entry.data.get(CONF_ROUTE_NAME, "")),
+        CONF_ROUTE_USERNAME: entry.options.get(
+            CONF_ROUTE_USERNAME, entry.data.get(CONF_ROUTE_USERNAME, "")
+        ),
+        CONF_ROUTE_PASSWORD: entry.options.get(
+            CONF_ROUTE_PASSWORD, entry.data.get(CONF_ROUTE_PASSWORD, "")
+        ),
     }
 
     # Luo ADS-yhteys (pyads) ajasäikeisesti
@@ -121,6 +142,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "ams_net_id": ams_net_id,
         "variables": variables,
         "device_profiles": device_profiles,
+        "ip_address": ip_address,
+        "ip_port": ip_port,
+        "current_ip_address": local_ip,
+        "sender_ams": sender_ams,
+        "pyads_version": _get_pyads_version(),
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

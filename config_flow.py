@@ -287,47 +287,31 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 or self.config_entry.data.get(CONF_DEVICE_PROFILES, [])
             )
 
-        if user_input is not None:
-            action = user_input.get("action", "finish")
-            if action == "add":
-                return await self.async_step_add_variable()
-            if action == "remove":
-                return await self.async_step_remove_variable()
-            if action == "add_light":
-                return await self.async_step_add_light()
-            if action == "edit_light":
-                return await self.async_step_edit_light_select()
-            if action == "remove_light":
-                return await self.async_step_remove_light()
-            if action == "manage_route":
-                return await self.async_step_manage_route()
-            return await self._save_and_finish()
-
         names = ", ".join(v["name"] for v in self._variables) or "–"
         lights = ", ".join(
             p.get(PROFILE_KEY_NAME, "")
             for p in self._device_profiles
             if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
         ) or "–"
-        return self.async_show_form(
+        return self.async_show_menu(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("action", default="finish"): vol.In(
-                        {
-                            "add": "Lisää muuttuja",
-                            "remove": "Poista muuttuja",
-                            "add_light": "Lisää valo",
-                            "edit_light": "Muokkaa valoa",
-                            "remove_light": "Poista valo",
-                            "manage_route": "Muokkaa route-konfiguraatiota",
-                            "finish": "Tallenna ja sulje",
-                        }
-                    )
-                }
-            ),
+            menu_options={
+                "add_variable": "Lisää muuttuja",
+                "remove_variable": "Poista muuttuja",
+                "add_light": "Lisää valo",
+                "edit_light_select": "Muokkaa valoa",
+                "remove_light": "Poista valo",
+                "manage_route": "Muokkaa route-konfiguraatiota",
+                "finish": "Tallenna ja sulje",
+            },
             description_placeholders={"variables": names, "lights": lights},
         )
+
+    async def async_step_finish(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Tallenna asetukset ja sulje options flow."""
+        return await self._save_and_finish()
 
     async def async_step_manage_route(
         self, user_input: dict[str, Any] | None = None

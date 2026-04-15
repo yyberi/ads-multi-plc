@@ -45,7 +45,19 @@
     "step": {
       "init": {
         "title": "Hallinnoi muuttujia ja laitteita",
-        "description": "Muuttujat: {variables} | Valot: {lights}"
+        "description": "Muuttujat: {variables} | Valot: {lights}",
+        "menu_options": {
+          "add_variable": "Lisää muuttuja",
+          "remove_variable": "Poista muuttuja",
+          "add_light": "Lisää valo",
+          "edit_light_select": "Muokkaa valoa",
+          "remove_light": "Poista valo",
+          "manage_route": "Muokkaa route-konfiguraatiota",
+          "finish": "Tallenna ja sulje"
+        }
+      },
+      "finish": {
+        "title": "Tallenna ja sulje"
       },
       "add_variable": {
         "title": "Lisää muuttuja",

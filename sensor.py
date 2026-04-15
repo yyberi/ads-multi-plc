@@ -12,8 +12,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_ADS_PORT,
+    ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS,
     ATTR_AMS_NET_ID,
+    ATTR_CONFIGURED_ASYNC_VARIABLES,
     ATTR_CURRENT_IP_ADDRESS,
+    ATTR_FAILED_ASYNC_SUBSCRIPTIONS,
     ATTR_PLC_IP_ADDRESS,
     ATTR_PLC_NAME,
     ATTR_PYADS_VERSION,
@@ -53,6 +56,7 @@ async def async_setup_entry(
         [
             AdsPlcPyadsVersionSensor(coordinator, entry, device_info, data),
             AdsPlcCurrentIpSensor(coordinator, entry, device_info, data),
+            AdsPlcAsyncSubscriptionCountSensor(coordinator, entry, device_info, data),
         ]
     )
     async_add_entities(entities)
@@ -188,6 +192,51 @@ class AdsPlcCurrentIpSensor(CoordinatorEntity, SensorEntity):
             ATTR_PLC_IP_ADDRESS: self._data.get("ip_address"),
             ATTR_ADS_PORT: self._data.get("ip_port"),
             ATTR_PYADS_VERSION: self._data.get("pyads_version"),
+            ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS: self.coordinator.active_async_subscription_count,
+            "sender_ams": self._data.get("sender_ams"),
+            "connection_status": "connected"
+            if self.coordinator.last_update_success
+            else "disconnected",
+        }
+
+
+class AdsPlcAsyncSubscriptionCountSensor(CoordinatorEntity, SensorEntity):
+    """Diagnostiikkasensori aktiivisten async-tilausten määrälle."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:lan-connect"
+
+    def __init__(
+        self,
+        coordinator: AdsPlcCoordinator,
+        entry: ConfigEntry,
+        device_info: DeviceInfo,
+        integration_data: dict[str, Any],
+    ) -> None:
+        super().__init__(coordinator)
+        self._data = integration_data
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_async_subscriptions"
+        self._attr_name = f"{coordinator.plc_name} asynkroniset tilaukset"
+        self._attr_device_info = device_info
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> int:
+        return self.coordinator.active_async_subscription_count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            ATTR_PLC_NAME: self.coordinator.plc_name,
+            ATTR_AMS_NET_ID: self.coordinator.ams_net_id,
+            ATTR_PLC_IP_ADDRESS: self._data.get("ip_address"),
+            ATTR_ADS_PORT: self._data.get("ip_port"),
+            ATTR_CONFIGURED_ASYNC_VARIABLES: self.coordinator.configured_async_variable_count,
+            ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS: self.coordinator.active_async_subscription_count,
+            ATTR_FAILED_ASYNC_SUBSCRIPTIONS: self.coordinator.failed_async_subscription_count,
             "sender_ams": self._data.get("sender_ams"),
             "connection_status": "connected"
             if self.coordinator.last_update_success

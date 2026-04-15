@@ -1,1 +1,58 @@
+# Local helper project (not part of this integration package)
 pyAdsTest/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pycache/
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+
+# Test / coverage outputs
+.coverage
+.coverage.*
+htmlcov/
+
+# Build / packaging artifacts
+build/
+dist/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Editor / IDE files
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+
+# Local secrets / environment files
+.env
+.env.*
+
+# Home Assistant local runtime files
+.storage/
+home-assistant_v2.db
+home-assistant_v2.db-*

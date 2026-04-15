@@ -215,7 +215,7 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Lisäattribuutit debugia varten."""
+        """Lisäattribuutit."""
         attrs: dict[str, Any] = {
             ATTR_PLC_NAME: self.coordinator.plc_name,
             ATTR_AMS_NET_ID: self.coordinator.ams_net_id,

@@ -15,6 +15,7 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_AMS_NET_ID,
+    CONF_ASYNC_READ,
     CONF_DEVICE_PROFILES,
     CONF_IP_ADDRESS,
     CONF_IP_PORT,
@@ -72,6 +73,7 @@ VARIABLE_SCHEMA = vol.Schema(
         vol.Optional("unit", default=""): str,
         vol.Optional("device_class", default=""): str,
         vol.Optional("writable", default=False): bool,
+        vol.Optional(CONF_ASYNC_READ, default=False): bool,
     }
 )
 
@@ -119,6 +121,16 @@ def _resolve_sender_ams(target_ip: str) -> str:
             err,
         )
     return f"{local_ip}.1.1"
+
+
+def _normalize_variables(variables: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalisoi muuttujat ja lisää puuttuvat oletusarvot."""
+    normalized: list[dict[str, Any]] = []
+    for variable in variables:
+        item = dict(variable)
+        item[CONF_ASYNC_READ] = bool(item.get(CONF_ASYNC_READ, False))
+        normalized.append(item)
+    return normalized
 
 
 class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -265,7 +277,7 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
         """Päävalikko: valitse toiminto."""
         # Alustetaan tässä koska __init__ ei ole käytössä uusissa HA-versioissa
         if not hasattr(self, "_variables"):
-            self._variables = list(
+            self._variables = _normalize_variables(
                 self.config_entry.options.get(CONF_VARIABLES)
                 or self.config_entry.data.get(CONF_VARIABLES, [])
             )

@@ -25,6 +25,7 @@
           "unit": "Yksikkö (vapaaehtoinen, esim. °C)",
           "device_class": "Device class (vapaaehtoinen)",
           "writable": "Kirjoitettava (switch/number)",
+          "async_read": "Asynkroninen luenta (ADS notification)",
           "finish": "Valmis – ei lisää muuttujia"
         }
       }
@@ -54,7 +55,8 @@
           "friendly_name": "Näyttönimi",
           "unit": "Yksikkö",
           "device_class": "Device class",
-          "writable": "Kirjoitettava"
+          "writable": "Kirjoitettava",
+          "async_read": "Asynkroninen luenta (ADS notification)"
         }
       },
       "remove_variable": {

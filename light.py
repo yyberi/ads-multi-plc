@@ -7,7 +7,6 @@ from homeassistant.components import light as light_comp
 from homeassistant.components.light import ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -69,20 +68,13 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
         self._brightness = profile.get(LIGHT_KEY_BRIGHTNESS)
         self._color_temp = profile.get(LIGHT_KEY_COLOR_TEMP)
 
-        plc_name: str = coordinator.plc_name
         profile_name: str = profile.get(PROFILE_KEY_NAME, f"Light {index + 1}")
         profile_name_slug = (
             str(profile_name).strip().lower().replace(" ", "_").replace(".", "_")
         )
 
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{profile_name_slug}_light"
-        self._attr_name = f"{plc_name} {profile_name}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=plc_name,
-            manufacturer="Beckhoff",
-            model="TwinCAT PLC",
-        )
+        self._attr_name = profile_name
 
         if self._color_temp:
             self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}

@@ -1,9 +1,16 @@
 """Apuja profiilipohjaisten laitteiden käsittelyyn."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from .const import CONF_PROFILE_TYPE, PROFILE_KEY_NAME, PROFILE_KEY_TYPE
+from .const import (
+    CONF_PROFILE_TYPE,
+    PROFILE_KEY_ID,
+    PROFILE_KEY_NAME,
+    PROFILE_KEY_TYPE,
+    PROFILE_TYPE_LIGHT,
+)
 
 
 def normalize_profiles(raw_profiles: Any) -> list[dict[str, Any]]:
@@ -11,6 +18,30 @@ def normalize_profiles(raw_profiles: Any) -> list[dict[str, Any]]:
     if not isinstance(raw_profiles, list):
         return []
     return [profile for profile in raw_profiles if isinstance(profile, dict)]
+
+
+def slugify_profile_id(value: str) -> str:
+    """Muodosta vakioitu profiili-ID."""
+    slug = re.sub(r"[^a-z0-9]+", "_", str(value).strip().lower()).strip("_")
+    return slug or "light"
+
+
+def ensure_profile_ids(raw_profiles: Any) -> list[dict[str, Any]]:
+    """Palauta profiilit listana ja varmista valoprofiileille pysyvä ID."""
+    profiles = normalize_profiles(raw_profiles)
+    normalized: list[dict[str, Any]] = []
+    for profile in profiles:
+        item = dict(profile)
+        if str(item.get(CONF_PROFILE_TYPE, "")).lower() == PROFILE_TYPE_LIGHT:
+            existing_id = str(item.get(PROFILE_KEY_ID, "")).strip()
+            if existing_id:
+                item[PROFILE_KEY_ID] = slugify_profile_id(existing_id)
+            else:
+                item[PROFILE_KEY_ID] = slugify_profile_id(
+                    str(item.get(PROFILE_KEY_NAME, ""))
+                )
+        normalized.append(item)
+    return normalized
 
 
 def get_profiles_by_type(

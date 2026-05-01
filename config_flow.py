@@ -12,6 +12,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     CONF_AMS_NET_ID,
@@ -27,18 +28,25 @@ from .const import (
     CONF_ROUTE_USERNAME,
     CONF_ROUTE_PASSWORD,
     CONF_ROUTE_NAME,
+    CONF_ROUTE_PASSWORD_SECRET,
     LIGHT_KEY_BRIGHTNESS,
     LIGHT_KEY_COLOR_TEMP,
     LIGHT_KEY_ON_OFF,
+    DEFAULT_SETTINGS_FILE,
     DEFAULT_PORT,
     DOMAIN,
     PROFILE_KEY_MAX,
+    PROFILE_KEY_ID,
     PROFILE_KEY_MIN,
     PROFILE_KEY_NAME,
     PROFILE_KEY_TYPE,
     PROFILE_TYPE_LIGHT,
+    SERVICE_EXPORT_SETTINGS,
+    SERVICE_IMPORT_SETTINGS,
+    SERVICE_FIELD_FILE_PATH,
+    SERVICE_FIELD_OVERWRITE_EXISTING,
 )
-from .entity_profiles import normalize_profiles
+from .entity_profiles import ensure_profile_ids, slugify_profile_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -206,6 +214,42 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_import(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Luo config entry YAML-importista."""
+        if user_input is None:
+            return self.async_abort(reason="invalid_import")
+
+        ams_net_id = str(user_input.get(CONF_AMS_NET_ID, "")).strip()
+        plc_name = str(user_input.get(CONF_PLC_NAME, "")).strip()
+        ip_address = str(user_input.get(CONF_IP_ADDRESS, "")).strip()
+        if not ams_net_id or not plc_name or not ip_address:
+            return self.async_abort(reason="invalid_import")
+
+        await self.async_set_unique_id(ams_net_id)
+        self._abort_if_unique_id_configured()
+
+        data = {
+            CONF_PLC_NAME: plc_name,
+            CONF_AMS_NET_ID: ams_net_id,
+            CONF_IP_ADDRESS: ip_address,
+            CONF_IP_PORT: int(user_input.get(CONF_IP_PORT, DEFAULT_PORT)),
+            CONF_VARIABLES: _normalize_variables(user_input.get(CONF_VARIABLES, [])),
+            CONF_DEVICE_PROFILES: ensure_profile_ids(user_input.get(CONF_DEVICE_PROFILES, [])),
+            CONF_ENABLE_ROUTE: bool(user_input.get(CONF_ENABLE_ROUTE, False)),
+            CONF_ROUTE_NAME: str(user_input.get(CONF_ROUTE_NAME, "")),
+            CONF_ROUTE_USERNAME: str(user_input.get(CONF_ROUTE_USERNAME, "")).strip(),
+            CONF_ROUTE_PASSWORD: str(user_input.get(CONF_ROUTE_PASSWORD, "")).strip(),
+            CONF_SENDER_AMS: str(user_input.get(CONF_SENDER_AMS) or _resolve_sender_ams(ip_address)),
+        }
+        secret_key = str(user_input.get(CONF_ROUTE_PASSWORD_SECRET, "")).strip()
+        if secret_key:
+            data[CONF_ROUTE_PASSWORD_SECRET] = secret_key
+
+        return self.async_create_entry(
+            title=plc_name,
+            data=data,
+        )
+
     async def async_step_variables(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -282,7 +326,7 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 or self.config_entry.data.get(CONF_VARIABLES, [])
             )
         if not hasattr(self, "_device_profiles"):
-            self._device_profiles = normalize_profiles(
+            self._device_profiles = ensure_profile_ids(
                 self.config_entry.options.get(CONF_DEVICE_PROFILES)
                 or self.config_entry.data.get(CONF_DEVICE_PROFILES, [])
             )
@@ -302,6 +346,8 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 "edit_light_select": "Muokkaa valoa",
                 "remove_light": "Poista valo",
                 "manage_route": "Muokkaa route-konfiguraatiota",
+                "export_settings": "Vie asetukset YAML-tiedostoon",
+                "import_settings": "Palauta asetukset YAML-tiedostosta",
                 "finish": "Tallenna ja sulje",
             },
             description_placeholders={"variables": names, "lights": lights},
@@ -342,6 +388,10 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                         CONF_ROUTE_USERNAME: username,
                         CONF_ROUTE_PASSWORD: password,
                         CONF_SENDER_AMS: sender_ams,
+                        CONF_ROUTE_PASSWORD_SECRET: self.config_entry.options.get(
+                            CONF_ROUTE_PASSWORD_SECRET,
+                            self.config_entry.data.get(CONF_ROUTE_PASSWORD_SECRET, ""),
+                        ),
                     },
                 )
 
@@ -366,6 +416,74 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "current_settings": str(current_route_config),
             },
+        )
+
+    async def async_step_export_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Vie integraation asetukset YAML-tiedostoon."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            file_path = str(user_input.get(SERVICE_FIELD_FILE_PATH, "")).strip()
+            service_data: dict[str, Any] = {}
+            if file_path:
+                service_data[SERVICE_FIELD_FILE_PATH] = file_path
+            try:
+                await self.hass.services.async_call(
+                    DOMAIN,
+                    SERVICE_EXPORT_SETTINGS,
+                    service_data,
+                    blocking=True,
+                )
+                return await self.async_step_init()
+            except HomeAssistantError:
+                errors["base"] = "export_failed"
+
+        return self.async_show_form(
+            step_id="export_settings",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(SERVICE_FIELD_FILE_PATH, default=""): str,
+                }
+            ),
+            errors=errors,
+            description_placeholders={"default_path": f"/config/{DEFAULT_SETTINGS_FILE}"},
+        )
+
+    async def async_step_import_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Palauta integraation asetukset YAML-tiedostosta."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            file_path = str(user_input.get(SERVICE_FIELD_FILE_PATH, "")).strip()
+            overwrite_existing = bool(user_input.get(SERVICE_FIELD_OVERWRITE_EXISTING, True))
+            service_data: dict[str, Any] = {
+                SERVICE_FIELD_OVERWRITE_EXISTING: overwrite_existing,
+            }
+            if file_path:
+                service_data[SERVICE_FIELD_FILE_PATH] = file_path
+            try:
+                await self.hass.services.async_call(
+                    DOMAIN,
+                    SERVICE_IMPORT_SETTINGS,
+                    service_data,
+                    blocking=True,
+                )
+                return await self.async_step_init()
+            except HomeAssistantError:
+                errors["base"] = "import_failed"
+
+        return self.async_show_form(
+            step_id="import_settings",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(SERVICE_FIELD_FILE_PATH, default=""): str,
+                    vol.Optional(SERVICE_FIELD_OVERWRITE_EXISTING, default=True): bool,
+                }
+            ),
+            errors=errors,
+            description_placeholders={"default_path": f"/config/{DEFAULT_SETTINGS_FILE}"},
         )
 
     async def async_step_add_variable(
@@ -553,6 +671,10 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                     self.config_entry.data.get(CONF_SENDER_AMS)
                     or _resolve_sender_ams(self.config_entry.data[CONF_IP_ADDRESS]),
                 ),
+                CONF_ROUTE_PASSWORD_SECRET: self.config_entry.options.get(
+                    CONF_ROUTE_PASSWORD_SECRET,
+                    self.config_entry.data.get(CONF_ROUTE_PASSWORD_SECRET, ""),
+                ),
             },
         )
 
@@ -629,8 +751,17 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
             errors["color_temp_max"] = "invalid_range"
             return errors, None
 
+        profile_id = ""
+        if current_name:
+            current_profile = self._find_light_profile(current_name)
+            if current_profile is not None:
+                profile_id = str(current_profile.get(PROFILE_KEY_ID, "")).strip()
+        if not profile_id:
+            profile_id = slugify_profile_id(profile_name)
+
         profile = {
             CONF_PROFILE_TYPE: PROFILE_TYPE_LIGHT,
+            PROFILE_KEY_ID: profile_id,
             PROFILE_KEY_NAME: profile_name,
             LIGHT_KEY_ON_OFF: {
                 PROFILE_KEY_NAME: on_off_symbol,

@@ -17,10 +17,12 @@ CONF_SENDER_AMS = "sender_ams"
 CONF_ROUTE_USERNAME = "route_username"
 CONF_ROUTE_PASSWORD = "route_password"
 CONF_ROUTE_NAME = "route_name"
+CONF_ROUTE_PASSWORD_SECRET = "route_password_secret"
 
 # Profiilipohjaiset laitteet
 CONF_PROFILE_TYPE = "profile_type"
 PROFILE_TYPE_LIGHT = "light"
+PROFILE_KEY_ID = "id"
 PROFILE_KEY_NAME = "name"
 PROFILE_KEY_TYPE = "type"
 PROFILE_KEY_MIN = "min"
@@ -35,6 +37,13 @@ DEFAULT_UPDATE_INTERVAL = 30  # sekuntia
 
 # Entiteettityypit joita tuetaan
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "light"]
+
+# Asetusten varmuuskopiointi / palautus
+DEFAULT_SETTINGS_FILE = f"{DOMAIN}_settings.yaml"
+SERVICE_EXPORT_SETTINGS = "export_settings"
+SERVICE_IMPORT_SETTINGS = "import_settings"
+SERVICE_FIELD_FILE_PATH = "file_path"
+SERVICE_FIELD_OVERWRITE_EXISTING = "overwrite_existing"
 
 # ADS-muuttujatyypit → Python-tyypit
 ADS_TYPEMAP = {

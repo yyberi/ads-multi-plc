@@ -19,13 +19,14 @@ from .const import (
     LIGHT_KEY_BRIGHTNESS,
     LIGHT_KEY_COLOR_TEMP,
     LIGHT_KEY_ON_OFF,
+    PROFILE_KEY_ID,
     PROFILE_KEY_MAX,
     PROFILE_KEY_MIN,
     PROFILE_KEY_NAME,
     PROFILE_KEY_TYPE,
     PROFILE_TYPE_LIGHT,
 )
-from .entity_profiles import get_profiles_by_type
+from .entity_profiles import get_profiles_by_type, slugify_profile_id
 
 INTEGER_TYPES = {"BYTE", "WORD", "DWORD", "INT", "DINT"}
 ATTR_BRIGHTNESS = light_comp.ATTR_BRIGHTNESS
@@ -69,11 +70,9 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
         self._color_temp = profile.get(LIGHT_KEY_COLOR_TEMP)
 
         profile_name: str = profile.get(PROFILE_KEY_NAME, f"Light {index + 1}")
-        profile_name_slug = (
-            str(profile_name).strip().lower().replace(" ", "_").replace(".", "_")
-        )
-
-        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{profile_name_slug}_light"
+        profile_id = str(profile.get(PROFILE_KEY_ID, "")).strip() or str(profile_name)
+        unique_slug = slugify_profile_id(profile_id)
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{unique_slug}_light"
         self._attr_name = profile_name
 
         if self._color_temp:

@@ -38,7 +38,8 @@
       "password_without_username": "Salasana vaatii käyttäjänimen."
     },
     "abort": {
-      "already_configured": "PLC on jo konfiguroitu."
+      "already_configured": "PLC on jo konfiguroitu.",
+      "invalid_import": "Tuotu YAML-konfiguraatio on virheellinen."
     }
   },
   "options": {
@@ -53,6 +54,8 @@
           "edit_light_select": "Muokkaa valoa",
           "remove_light": "Poista valo",
           "manage_route": "Muokkaa route-konfiguraatiota",
+          "export_settings": "Vie asetukset YAML-tiedostoon",
+          "import_settings": "Palauta asetukset YAML-tiedostosta",
           "finish": "Tallenna ja sulje"
         }
       },
@@ -85,6 +88,21 @@
           "route_name": "Reitin nimi",
           "route_username": "PLC:n käyttäjänimi",
           "route_password": "PLC:n salasana"
+        }
+      },
+      "export_settings": {
+        "title": "Vie asetukset YAML-tiedostoon",
+        "description": "Jos polkua ei anneta, käytetään oletusta: {default_path}",
+        "data": {
+          "file_path": "Tiedostopolku (valinnainen)"
+        }
+      },
+      "import_settings": {
+        "title": "Palauta asetukset YAML-tiedostosta",
+        "description": "Jos polkua ei anneta, käytetään oletusta: {default_path}",
+        "data": {
+          "file_path": "Tiedostopolku (valinnainen)",
+          "overwrite_existing": "Korvaa olemassa olevat PLC-entryt"
         }
       },
       "add_light": {
@@ -138,7 +156,9 @@
       "light_exists": "Samanniminen valo on jo olemassa.",
       "invalid_range": "Maksimiarvon pitää olla suurempi kuin minimiarvo.",
       "light_name_required": "Valon nimi on pakollinen.",
-      "light_on_off_required": "On/off ADS-symboli on pakollinen."
+      "light_on_off_required": "On/off ADS-symboli on pakollinen.",
+      "export_failed": "Asetusten vienti epäonnistui.",
+      "import_failed": "Asetusten palautus epäonnistui."
     }
   }
 }

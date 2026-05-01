@@ -1,0 +1,28 @@
+export_settings:
+  name: Vie asetukset YAML-tiedostoon
+  description: Vie kaikki ADS Multi -integraation asetukset YAML-tiedostoon.
+  fields:
+    file_path:
+      name: Tiedostopolku
+      description: "Valinnainen kohdepolku. Oletus: /config/ads_multi_settings.yaml"
+      required: false
+      selector:
+        text:
+
+import_settings:
+  name: Palauta asetukset YAML-tiedostosta
+  description: Lukee YAML-tiedoston ja päivittää/luo ADS Multi -PLC entryt.
+  fields:
+    file_path:
+      name: Tiedostopolku
+      description: "Valinnainen lähdepolku. Oletus: /config/ads_multi_settings.yaml"
+      required: false
+      selector:
+        text:
+    overwrite_existing:
+      name: Korvaa olemassa olevat
+      description: Jos käytössä, olemassa olevat PLC-entryt päivitetään YAMLin arvoilla.
+      required: false
+      default: true
+      selector:
+        boolean:

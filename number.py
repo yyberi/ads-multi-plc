@@ -6,7 +6,6 @@ from typing import Any
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -37,6 +36,8 @@ async def async_setup_entry(
 class AdsPlcNumber(CoordinatorEntity, NumberEntity):
     """Numeerinen PLC-muuttuja liukusäätimenä."""
 
+    _attr_has_entity_name = False
+
     def __init__(
         self,
         coordinator: AdsPlcCoordinator,
@@ -48,10 +49,9 @@ class AdsPlcNumber(CoordinatorEntity, NumberEntity):
         self._variable = variable
         var_name: str = variable["name"]
         friendly: str = variable.get("friendly_name") or var_name
-        plc_name: str = coordinator.plc_name
 
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{var_name}_num"
-        self._attr_name = f"{plc_name} {friendly}"
+        self._attr_name = friendly
         self._attr_native_unit_of_measurement = variable.get("unit") or None
         self._attr_mode = NumberMode.BOX
 
@@ -69,13 +69,6 @@ class AdsPlcNumber(CoordinatorEntity, NumberEntity):
             self._attr_native_min_value = variable.get("min", 0)
             self._attr_native_max_value = variable.get("max", 65535)
             self._attr_native_step = variable.get("step", 1)
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=plc_name,
-            manufacturer="Beckhoff",
-            model="TwinCAT PLC",
-        )
 
     @property
     def native_value(self) -> float | None:

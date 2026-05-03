@@ -48,7 +48,7 @@ async def async_setup_entry(
     )
 
     entities = [
-        AdsPlcSensor(coordinator, var, entry, device_info)
+        AdsPlcSensor(coordinator, var, entry)
         for var in variables
         if var["type"].upper() in SENSOR_TYPES
     ]
@@ -65,12 +65,13 @@ async def async_setup_entry(
 class AdsPlcSensor(CoordinatorEntity, SensorEntity):
     """Yksi PLC-muuttuja sensori-entiteettinä."""
 
+    _attr_has_entity_name = False
+
     def __init__(
         self,
         coordinator: AdsPlcCoordinator,
         variable: dict[str, Any],
         entry: ConfigEntry,
-        device_info: DeviceInfo,
     ) -> None:
         """Alusta."""
         super().__init__(coordinator)
@@ -79,11 +80,10 @@ class AdsPlcSensor(CoordinatorEntity, SensorEntity):
 
         var_name: str = variable["name"]
         friendly: str = variable.get("friendly_name") or var_name
-        plc_name: str = coordinator.plc_name
 
         # Unique ID: domain + entry_id + muuttujan nimi (uniikki per PLC)
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{var_name}"
-        self._attr_name = f"{plc_name} {friendly}"
+        self._attr_name = friendly
         self._attr_native_unit_of_measurement = variable.get("unit") or None
 
         # Aseta device_class jos annettu
@@ -93,9 +93,6 @@ class AdsPlcSensor(CoordinatorEntity, SensorEntity):
                 self._attr_device_class = SensorDeviceClass(dc)
             except ValueError:
                 pass
-
-        # Ryhmitä kaikki saman PLC:n entiteetit samaan laitteeseen
-        self._attr_device_info = device_info
 
     @property
     def native_value(self):

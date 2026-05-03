@@ -6,7 +6,6 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -35,6 +34,8 @@ async def async_setup_entry(
 class AdsPlcSwitch(CoordinatorEntity, SwitchEntity):
     """BOOL-muuttuja kytkimenä – voidaan lukea ja kirjoittaa."""
 
+    _attr_has_entity_name = False
+
     def __init__(
         self,
         coordinator: AdsPlcCoordinator,
@@ -46,16 +47,9 @@ class AdsPlcSwitch(CoordinatorEntity, SwitchEntity):
         self._variable = variable
         var_name: str = variable["name"]
         friendly: str = variable.get("friendly_name") or var_name
-        plc_name: str = coordinator.plc_name
 
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{var_name}_sw"
-        self._attr_name = f"{plc_name} {friendly}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=plc_name,
-            manufacturer="Beckhoff",
-            model="TwinCAT PLC",
-        )
+        self._attr_name = friendly
 
     @property
     def is_on(self) -> bool | None:

@@ -14,20 +14,6 @@
           "route_username": "PLC:n käyttäjänimi route-lisäämistä varten (vapaaehtoinen)",
           "route_password": "PLC:n salasana route-lisäämistä varten (vapaaehtoinen)"
         }
-      },
-      "variables": {
-        "title": "Lisää PLC-muuttujia",
-        "description": "PLC: {plc_name} | Lisätty: {added_count} muuttujaa ({added_list}). Lisää muuttuja tai paina 'Valmis'.",
-        "data": {
-          "name": "Muuttujan nimi (esim. MAIN.bPumppiKaytossa)",
-          "type": "Tyyppi",
-          "friendly_name": "Näyttönimi (vapaaehtoinen)",
-          "unit": "Yksikkö (vapaaehtoinen, esim. °C)",
-          "device_class": "Device class (vapaaehtoinen)",
-          "writable": "Kirjoitettava (switch/number)",
-          "async_read": "Asynkroninen luenta (ADS notification)",
-          "finish": "Valmis – ei lisää muuttujia"
-        }
       }
     },
     "error": {

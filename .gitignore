@@ -56,3 +56,4 @@ ENV/
 .storage/
 home-assistant_v2.db
 home-assistant_v2.db-*
+temp_config.yaml

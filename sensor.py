@@ -24,7 +24,7 @@ from .const import (
     ATTR_VAR_TYPE,
     DOMAIN,
 )
-from . import AdsPlcCoordinator
+from .coordinator import AdsPlcCoordinator
 
 # Muuttujatyypit jotka kuuluvat sensor-platformille (ei BOOL → binary_sensor)
 SENSOR_TYPES = {"BYTE", "WORD", "DWORD", "INT", "DINT", "REAL", "LREAL", "STRING", "TIME"}

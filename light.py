@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import AdsPlcCoordinator
 from .const import (
     ATTR_AMS_NET_ID,
     ATTR_PLC_NAME,
@@ -26,6 +25,7 @@ from .const import (
     PROFILE_KEY_TYPE,
     PROFILE_TYPE_LIGHT,
 )
+from .coordinator import AdsPlcCoordinator
 from .entity_profiles import get_profiles_by_type, slugify_profile_id
 
 INTEGER_TYPES = {"BYTE", "WORD", "DWORD", "INT", "DINT"}

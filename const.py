@@ -45,23 +45,6 @@ SERVICE_IMPORT_SETTINGS = "import_settings"
 SERVICE_FIELD_FILE_PATH = "file_path"
 SERVICE_FIELD_OVERWRITE_EXISTING = "overwrite_existing"
 
-# ADS-muuttujatyypit → Python-tyypit
-ADS_TYPEMAP = {
-    "BOOL": bool,
-    "BYTE": int,
-    "WORD": int,
-    "DWORD": int,
-    "INT": int,
-    "DINT": int,
-    "REAL": float,
-    "LREAL": float,
-    "STRING": str,
-    "TIME": int,
-    "TOD": int,
-    "DATE": int,
-    "DT": int,
-}
-
 # Attribuuttiavaimet
 ATTR_PLC_NAME = "plc_name"
 ATTR_AMS_NET_ID = "ams_net_id"

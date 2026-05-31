@@ -1,5 +1,12 @@
-# https://www.home-assistant.io/integrations/default_config/
-default_config:
+# Minimal development setup for this custom integration.
+# Avoid default_config here because it pulls in go2rtc, which is not available in this dev environment.
+config:
+frontend:
+history:
+logbook:
+my:
+system_health:
+
 
 # https://www.home-assistant.io/integrations/homeassistant/
 homeassistant:

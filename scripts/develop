@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+if [[ -x "${PWD}/.venv/bin/hass" ]]; then
+    HASS_CMD=("${PWD}/.venv/bin/hass")
+elif [[ -x "${PWD}/.venv/bin/python" ]] && "${PWD}/.venv/bin/python" -c "import homeassistant" >/dev/null 2>&1; then
+    HASS_CMD=("${PWD}/.venv/bin/python" -m homeassistant)
+elif command -v hass >/dev/null 2>&1; then
+    HASS_CMD=(hass)
+elif python3 -c "import homeassistant" >/dev/null 2>&1; then
+    HASS_CMD=(python3 -m homeassistant)
+else
+    echo "Home Assistant is not installed in this Python environment." >&2
+    echo "Run scripts/setup first, then run scripts/develop again." >&2
+    exit 1
+fi
+
+# Create config dir if not present
+if [[ ! -d "${PWD}/config" ]]; then
+    mkdir -p "${PWD}/config"
+    "${HASS_CMD[@]}" --config "${PWD}/config" --script ensure_config
+fi
+
+# Set the path to custom_components so Home Assistant can load ads_multi from this repo.
+export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
+
+# Start Home Assistant
+"${HASS_CMD[@]}" --config "${PWD}/config" --debug

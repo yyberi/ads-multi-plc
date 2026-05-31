@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+VENV_DIR="${VENV_DIR:-.venv}"
+
+"${PYTHON_BIN}" - <<'PY'
+import sys
+
+minimum = (3, 13)
+current = sys.version_info[:2]
+if current < minimum:
+    raise SystemExit(
+        "Home Assistant development requires Python "
+        f"{minimum[0]}.{minimum[1]} or newer; found "
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}."
+    )
+PY
+
+if [[ ! -d "${VENV_DIR}" ]]; then
+    "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+fi
+
+"${VENV_DIR}/bin/python" -m pip install --upgrade pip
+"${VENV_DIR}/bin/python" -m pip install --requirement requirements.txt

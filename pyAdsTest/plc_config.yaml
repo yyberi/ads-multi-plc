@@ -1,0 +1,45 @@
+plcs:
+  - name: PLC1
+    ip: 192.168.0.10
+    ams: 192.168.0.10.1.1
+    host: 192.168.0.10
+  - name: PLC2
+    ip: 192.168.0.11
+    ams: 192.168.0.11.1.1
+    host: 192.168.0.11
+  - name: GARAGE-PLC
+    ip: 192.168.0.12
+    ams: 192.168.0.12.1.1
+    host: 192.168.0.12
+
+variable_polls:
+  - plc_name: GARAGE-PLC
+    topic: house/temperatures
+    name: garage
+    interval_seconds: 10.0
+    allow_partial: true
+    variables:
+      - name: sensor1
+        symbol: HEATING.fbSensor1.OUT
+      - name: pi1
+        symbol: HEATING.fbPiController1.OUT
+      - name: sensor2
+        symbol: HEATING.fbSensor2.OUT
+      - name: pi2
+        symbol: HEATING.fbPiController2.OUT
+  - plc_name: ""
+    topic: house/summary
+    name: summary
+    interval_seconds: 10.0
+    allow_partial: true
+    retain: true
+    variables:
+      - name: sauna
+        plc_name: PLC2
+        symbol: HEATING.fbSensor12.OUT
+      - name: lj
+        plc_name: PLC2
+        symbol: HEATING.fbSensor16.OUT
+      - name: garage_temperature
+        plc_name: GARAGE-PLC
+        symbol: HEATING.fbSensor1.OUT

@@ -1,0 +1,4 @@
+pyads
+python-dotenv
+paho-mqtt
+pyyaml

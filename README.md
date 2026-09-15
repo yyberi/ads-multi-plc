@@ -42,6 +42,15 @@ scripts/develop
 `scripts/develop` starts Home Assistant with this repository's `custom_components` directory on `PYTHONPATH`.
 If `python3` points to an older Python, run setup with `PYTHON_BIN=python3.13 scripts/setup`.
 
+### Integration blueprint
+
+Project structure and development tooling were adapted from
+[`ludeeus/integration_blueprint`](https://github.com/ludeeus/integration_blueprint).
+The `blueprint_reference/` directory contains example code for development;
+the working integration is in `custom_components/ads_multi/`.
+See [blueprint origin and update instructions](blueprint_reference/README.md)
+for the reviewed upstream commit and the selective update workflow.
+
 ## Installation
 
 1. Copy `custom_components/ads_multi/` to:

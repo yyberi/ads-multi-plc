@@ -56,6 +56,13 @@ Home Assistant instance running and already configured with the included
 [`configuration.yaml`](./config/configuration.yaml)
 file.
 
+## Maintaining the integration blueprint
+
+Follow the [blueprint origin and update instructions](blueprint_reference/README.md)
+to compare upstream changes and apply relevant updates. The template is maintained
+through selective changes; its example code is not a runtime dependency of the
+ADS integration. Record each review's upstream commit and date in that document.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under its MIT License.

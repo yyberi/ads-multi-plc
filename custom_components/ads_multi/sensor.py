@@ -1,18 +1,17 @@
 """Sensor-platform: lukee numeeriset ja teksti-muuttujat PLC:ltä."""
+
 from __future__ import annotations
 
-from typing import Any
+import contextlib
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
-    ATTR_ADS_PORT,
     ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS,
+    ATTR_ADS_PORT,
     ATTR_AMS_NET_ID,
     ATTR_CONFIGURED_ASYNC_VARIABLES,
     ATTR_CURRENT_IP_ADDRESS,
@@ -24,10 +23,26 @@ from .const import (
     ATTR_VAR_TYPE,
     DOMAIN,
 )
-from .coordinator import AdsPlcCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from .coordinator import AdsPlcCoordinator
 
 # Muuttujatyypit jotka kuuluvat sensor-platformille (ei BOOL → binary_sensor)
-SENSOR_TYPES = {"BYTE", "WORD", "DWORD", "INT", "DINT", "REAL", "LREAL", "STRING", "TIME"}
+SENSOR_TYPES = {
+    "BYTE",
+    "WORD",
+    "DWORD",
+    "INT",
+    "DINT",
+    "REAL",
+    "LREAL",
+    "STRING",
+    "TIME",
+}
 
 
 async def async_setup_entry(
@@ -89,13 +104,11 @@ class AdsPlcSensor(CoordinatorEntity, SensorEntity):
         # Aseta device_class jos annettu
         dc = variable.get("device_class", "")
         if dc:
-            try:
+            with contextlib.suppress(ValueError):
                 self._attr_device_class = SensorDeviceClass(dc)
-            except ValueError:
-                pass
 
     @property
-    def native_value(self):
+    def native_value(self) -> Any:
         """Palauta muuttujan nykyinen arvo koordinaattorin datasta."""
         if self.coordinator.data is None:
             return None
@@ -125,6 +138,7 @@ class AdsPlcPyadsVersionSensor(CoordinatorEntity, SensorEntity):
         device_info: DeviceInfo,
         integration_data: dict[str, Any],
     ) -> None:
+        """Alusta PLC-yhteyden diagnostiikkasensori."""
         super().__init__(coordinator)
         self._data = integration_data
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_pyads_version"
@@ -133,14 +147,17 @@ class AdsPlcPyadsVersionSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
+        """Pidä diagnostiikka saatavilla myös yhteyskatkon aikana."""
         return True
 
     @property
     def native_value(self) -> str:
+        """Palauta yhteyden tallennettu diagnostiikka-arvo."""
         return str(self._data.get("pyads_version", "unknown"))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Palauta PLC-yhteyden diagnostiikkatiedot."""
         return {
             ATTR_PLC_NAME: self.coordinator.plc_name,
             ATTR_AMS_NET_ID: self.coordinator.ams_net_id,
@@ -167,6 +184,7 @@ class AdsPlcCurrentIpSensor(CoordinatorEntity, SensorEntity):
         device_info: DeviceInfo,
         integration_data: dict[str, Any],
     ) -> None:
+        """Alusta PLC-yhteyden diagnostiikkasensori."""
         super().__init__(coordinator)
         self._data = integration_data
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_current_ip"
@@ -175,21 +193,26 @@ class AdsPlcCurrentIpSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
+        """Pidä diagnostiikka saatavilla myös yhteyskatkon aikana."""
         return True
 
     @property
     def native_value(self) -> str:
+        """Palauta yhteyden tallennettu diagnostiikka-arvo."""
         return str(self._data.get("current_ip_address", "unknown"))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Palauta PLC-yhteyden diagnostiikkatiedot."""
         return {
             ATTR_PLC_NAME: self.coordinator.plc_name,
             ATTR_AMS_NET_ID: self.coordinator.ams_net_id,
             ATTR_PLC_IP_ADDRESS: self._data.get("ip_address"),
             ATTR_ADS_PORT: self._data.get("ip_port"),
             ATTR_PYADS_VERSION: self._data.get("pyads_version"),
-            ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS: self.coordinator.active_async_subscription_count,
+            ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS: (
+                self.coordinator.active_async_subscription_count
+            ),
             "sender_ams": self._data.get("sender_ams"),
             "connection_status": "connected"
             if self.coordinator.last_update_success
@@ -210,6 +233,7 @@ class AdsPlcAsyncSubscriptionCountSensor(CoordinatorEntity, SensorEntity):
         device_info: DeviceInfo,
         integration_data: dict[str, Any],
     ) -> None:
+        """Alusta PLC-yhteyden diagnostiikkasensori."""
         super().__init__(coordinator)
         self._data = integration_data
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_async_subscriptions"
@@ -218,22 +242,31 @@ class AdsPlcAsyncSubscriptionCountSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
+        """Pidä diagnostiikka saatavilla myös yhteyskatkon aikana."""
         return True
 
     @property
     def native_value(self) -> int:
+        """Palauta aktiivisten ADS-tilausten määrä."""
         return self.coordinator.active_async_subscription_count
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        """Palauta PLC-yhteyden diagnostiikkatiedot."""
         return {
             ATTR_PLC_NAME: self.coordinator.plc_name,
             ATTR_AMS_NET_ID: self.coordinator.ams_net_id,
             ATTR_PLC_IP_ADDRESS: self._data.get("ip_address"),
             ATTR_ADS_PORT: self._data.get("ip_port"),
-            ATTR_CONFIGURED_ASYNC_VARIABLES: self.coordinator.configured_async_variable_count,
-            ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS: self.coordinator.active_async_subscription_count,
-            ATTR_FAILED_ASYNC_SUBSCRIPTIONS: self.coordinator.failed_async_subscription_count,
+            ATTR_CONFIGURED_ASYNC_VARIABLES: (
+                self.coordinator.configured_async_variable_count
+            ),
+            ATTR_ACTIVE_ASYNC_SUBSCRIPTIONS: (
+                self.coordinator.active_async_subscription_count
+            ),
+            ATTR_FAILED_ASYNC_SUBSCRIPTIONS: (
+                self.coordinator.failed_async_subscription_count
+            ),
             "sender_ams": self._data.get("sender_ams"),
             "connection_status": "connected"
             if self.coordinator.last_update_success

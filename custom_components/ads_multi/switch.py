@@ -1,16 +1,20 @@
 """Switch-platform: kirjoitettavat BOOL-muuttujat PLC:llä."""
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import ATTR_AMS_NET_ID, ATTR_PLC_NAME, ATTR_VAR_NAME, ATTR_VAR_TYPE, DOMAIN
-from .coordinator import AdsPlcCoordinator
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from .coordinator import AdsPlcCoordinator
 
 
 async def async_setup_entry(
@@ -32,7 +36,7 @@ async def async_setup_entry(
 
 
 class AdsPlcSwitch(CoordinatorEntity, SwitchEntity):
-    """BOOL-muuttuja kytkimenä – voidaan lukea ja kirjoittaa."""
+    """BOOL-muuttuja kytkimenä - voidaan lukea ja kirjoittaa."""
 
     _attr_has_entity_name = False
 
@@ -59,15 +63,15 @@ class AdsPlcSwitch(CoordinatorEntity, SwitchEntity):
         val = self.coordinator.data.get(self._variable["name"])
         return bool(val) if val is not None else None
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **_kwargs: Any) -> None:
         """Kirjoita TRUE PLC:lle."""
-        await self._write(True)
+        await self._write(value=True)
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **_kwargs: Any) -> None:
         """Kirjoita FALSE PLC:lle."""
-        await self._write(False)
+        await self._write(value=False)
 
-    async def _write(self, value: bool) -> None:
+    async def _write(self, *, value: bool) -> None:
         """Kirjoita arvo ja päivitä koordinaattorin data välittömästi."""
         var_name: str = self._variable["name"]
         coordinator: AdsPlcCoordinator = self.coordinator

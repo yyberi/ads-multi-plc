@@ -1,17 +1,15 @@
 """Asetusten YAML-vienti ja -palautus ADS Multi -integraatiolle."""
+
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import logging
-from pathlib import Path
 import re
-from typing import Any
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 import yaml
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
@@ -42,6 +40,10 @@ from .helpers import (
     effective_option,
     normalize_variables,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant, ServiceCall
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,7 +76,8 @@ def _safe_read_yaml(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         content = yaml.safe_load(handle) or {}
     if not isinstance(content, dict):
-        raise HomeAssistantError(f"YAML-tiedoston '{path}' juuressa pitää olla map-rakenne.")
+        msg = f"YAML-tiedoston '{path}' juuressa pitää olla map-rakenne."
+        raise HomeAssistantError(msg)
     return content
 
 
@@ -102,11 +105,15 @@ def _entry_to_export_payload(entry: ConfigEntry) -> dict[str, Any]:
         CONF_AMS_NET_ID: entry.data.get(CONF_AMS_NET_ID, ""),
         CONF_IP_ADDRESS: entry.data.get(CONF_IP_ADDRESS, ""),
         CONF_IP_PORT: entry.data.get(CONF_IP_PORT, 851),
-        CONF_VARIABLES: normalize_variables(effective_option(entry, CONF_VARIABLES, [])),
+        CONF_VARIABLES: normalize_variables(
+            effective_option(entry, CONF_VARIABLES, [])
+        ),
         CONF_DEVICE_PROFILES: ensure_profile_ids(
             effective_option(entry, CONF_DEVICE_PROFILES, [])
         ),
-        CONF_ENABLE_ROUTE: bool(effective_option(entry, CONF_ENABLE_ROUTE, False)),
+        CONF_ENABLE_ROUTE: bool(
+            effective_option(entry, CONF_ENABLE_ROUTE, default=False)
+        ),
         CONF_ROUTE_NAME: effective_option(entry, CONF_ROUTE_NAME, ""),
         CONF_ROUTE_USERNAME: effective_option(entry, CONF_ROUTE_USERNAME, ""),
         CONF_SENDER_AMS: effective_option(entry, CONF_SENDER_AMS, ""),
@@ -160,14 +167,14 @@ def _build_entry_options_from_payload(
 def _validate_import_payload(raw_entry: Any) -> dict[str, Any]:
     """Validoi import-rivin minimiavaimet."""
     if not isinstance(raw_entry, dict):
-        raise HomeAssistantError("Import-entry pitää olla YAML map-rakenne.")
+        msg = "Import-entry pitää olla YAML map-rakenne."
+        raise HomeAssistantError(msg)
 
     required = [CONF_PLC_NAME, CONF_AMS_NET_ID, CONF_IP_ADDRESS]
     missing = [key for key in required if not str(raw_entry.get(key, "")).strip()]
     if missing:
-        raise HomeAssistantError(
-            f"Import-entryltä puuttuu pakollisia kenttiä: {', '.join(missing)}"
-        )
+        msg = f"Import-entryltä puuttuu pakollisia kenttiä: {', '.join(missing)}"
+        raise HomeAssistantError(msg)
 
     payload = dict(raw_entry)
     payload[CONF_PLC_NAME] = str(payload[CONF_PLC_NAME]).strip()
@@ -175,7 +182,9 @@ def _validate_import_payload(raw_entry: Any) -> dict[str, Any]:
     payload[CONF_IP_ADDRESS] = str(payload[CONF_IP_ADDRESS]).strip()
     payload[CONF_IP_PORT] = int(payload.get(CONF_IP_PORT, 851))
     payload[CONF_VARIABLES] = normalize_variables(payload.get(CONF_VARIABLES, []))
-    payload[CONF_DEVICE_PROFILES] = ensure_profile_ids(payload.get(CONF_DEVICE_PROFILES, []))
+    payload[CONF_DEVICE_PROFILES] = ensure_profile_ids(
+        payload.get(CONF_DEVICE_PROFILES, [])
+    )
     payload[CONF_ENABLE_ROUTE] = bool(payload.get(CONF_ENABLE_ROUTE, False))
     payload[CONF_ROUTE_NAME] = str(payload.get(CONF_ROUTE_NAME, ""))
     payload[CONF_ROUTE_USERNAME] = str(payload.get(CONF_ROUTE_USERNAME, ""))
@@ -203,9 +212,9 @@ async def async_export_settings_to_yaml(
         exported = _entry_to_export_payload(entry)
         route_password = str(effective_option(entry, CONF_ROUTE_PASSWORD, "") or "")
         if route_password:
-            secret_key = exported.get(SETTINGS_YAML_PASSWORD_SECRET_KEY) or _secret_key_for_ams(
-                str(exported[CONF_AMS_NET_ID])
-            )
+            secret_key = exported.get(
+                SETTINGS_YAML_PASSWORD_SECRET_KEY
+            ) or _secret_key_for_ams(str(exported[CONF_AMS_NET_ID]))
             exported[SETTINGS_YAML_PASSWORD_SECRET_KEY] = secret_key
             secrets_payload[secret_key] = route_password
         exported_entries.append(exported)
@@ -221,9 +230,11 @@ async def async_export_settings_to_yaml(
     return settings_path
 
 
-async def async_import_settings_from_yaml(
+# Keep the import guard and sequential update/create flow together.
+async def async_import_settings_from_yaml(  # noqa: PLR0912
     hass: HomeAssistant,
     path_override: str | None = None,
+    *,
     overwrite_existing: bool = True,
 ) -> tuple[int, int]:
     """Palauta integraation asetukset YAML-tiedostosta."""
@@ -233,9 +244,11 @@ async def async_import_settings_from_yaml(
     document = await hass.async_add_executor_job(_safe_read_yaml, settings_path)
     raw_entries = document.get(SETTINGS_YAML_ENTRIES_KEY, [])
     if not isinstance(raw_entries, list):
-        raise HomeAssistantError(
-            f"Kentän '{SETTINGS_YAML_ENTRIES_KEY}' pitää olla lista tiedostossa '{settings_path}'."
+        msg = (
+            f"Kentän '{SETTINGS_YAML_ENTRIES_KEY}' pitää olla lista "
+            f"tiedostossa '{settings_path}'."
         )
+        raise HomeAssistantError(msg)
 
     secrets_payload = await hass.async_add_executor_job(_safe_read_yaml, secrets_path)
 
@@ -338,7 +351,9 @@ async def async_register_settings_services(hass: HomeAssistant) -> None:
         updated, created = await async_import_settings_from_yaml(
             hass,
             call.data.get(SERVICE_FIELD_FILE_PATH),
-            bool(call.data.get(SERVICE_FIELD_OVERWRITE_EXISTING, True)),
+            overwrite_existing=bool(
+                call.data.get(SERVICE_FIELD_OVERWRITE_EXISTING, True)
+            ),
         )
         _LOGGER.info(
             "ADS Multi asetukset palautettu YAML:stä (päivitetty=%s, luotu=%s)",

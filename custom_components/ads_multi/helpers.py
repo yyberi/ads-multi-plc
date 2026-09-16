@@ -1,14 +1,16 @@
 """Yhteiset apufunktiot ADS Multi -integraatiolle."""
+
 from __future__ import annotations
 
 import logging
 import socket
-from typing import Any
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from typing import TYPE_CHECKING, Any
 
 from .const import CONF_ASYNC_READ, DOMAIN
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 

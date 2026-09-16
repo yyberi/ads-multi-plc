@@ -1,8 +1,10 @@
 """ADS-yhteyden ja route-lisäyksen apufunktiot."""
+
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version as package_version
 import logging
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from typing import Any
 
 import pyads
@@ -29,7 +31,7 @@ def get_pyads_version() -> str:
         return "unknown"
 
 
-def ads_type(type_str: str):
+def ads_type(type_str: str) -> type:
     """Muunna tyyppimerkkijono pyads-vakioksi."""
     type_map = {
         "BOOL": pyads.PLCTYPE_BOOL,
@@ -115,12 +117,10 @@ def create_plc_connection(
                 ams_net_id,
                 err,
             )
-        except Exception as err:  # pylint: disable=broad-exception-caught
-            _LOGGER.error(
-                "Route-lisääminen epäonnistui odottamattomalla virheellä (%s): %s",
+        except Exception:  # pylint: disable=broad-exception-caught
+            _LOGGER.exception(
+                "Route-lisääminen epäonnistui odottamattomalla virheellä (%s)",
                 ams_net_id,
-                err,
-                exc_info=True,
             )
     else:
         _LOGGER.debug(
@@ -135,11 +135,12 @@ def create_plc_connection(
     return plc
 
 
+# Connection probe, not a pytest test.
 def test_connection(
     ams_net_id: str,
     ip_address: str,
     ip_port: int,
-    route_config: dict[str, Any] | None = None,
+    route_config: dict[str, Any] | None = None,  # noqa: PT028 - Runtime connection probe.
 ) -> bool:
     """Testaa ADS-yhteys synkronisesti ja lisää reitin tarvittaessa."""
     _LOGGER.debug(
@@ -153,11 +154,9 @@ def test_connection(
         _LOGGER.info("Route-lisääminen aktivoitu testissä")
         try:
             add_ads_route(ams_net_id, ip_address, route_config)
-        except Exception as err:  # pylint: disable=broad-exception-caught
-            _LOGGER.error(
-                "Route-lisääminen epäonnistui testissä: %s",
-                err,
-                exc_info=True,
+        except Exception:  # pylint: disable=broad-exception-caught
+            _LOGGER.exception(
+                "Route-lisääminen epäonnistui testissä",
             )
             return False
 
@@ -168,18 +167,18 @@ def test_connection(
         plc.open()
         plc.read_state()
         _LOGGER.info("Yhteyden testaus onnistui: %s", ams_net_id)
-        return True
-    except Exception as err:  # pylint: disable=broad-exception-caught
+    except Exception:  # pylint: disable=broad-exception-caught
         _LOGGER.exception(
-            "ADS-yhteystesti epäonnistui (%s / %s): %s",
+            "ADS-yhteystesti epäonnistui (%s / %s)",
             ams_net_id,
             ip_address,
-            err,
         )
         return False
+    else:
+        return True
     finally:
         if plc is not None:
             try:
                 plc.close()
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception:  # noqa: BLE001 - Cleanup must not hide the probe result.
                 _LOGGER.debug("Testiyhteyden sulkeminen epäonnistui", exc_info=True)

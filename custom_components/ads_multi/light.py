@@ -1,20 +1,18 @@
 """Light-platform: profiilipohjaiset valot (on/off, himmennys, valolämpötila)."""
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components import light as light_comp
 from homeassistant.components.light import ColorMode, LightEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_AMS_NET_ID,
     ATTR_PLC_NAME,
-    DOMAIN,
     CONF_PROFILE_TYPE,
+    DOMAIN,
     LIGHT_KEY_BRIGHTNESS,
     LIGHT_KEY_COLOR_TEMP,
     LIGHT_KEY_ON_OFF,
@@ -25,13 +23,21 @@ from .const import (
     PROFILE_KEY_TYPE,
     PROFILE_TYPE_LIGHT,
 )
-from .coordinator import AdsPlcCoordinator
 from .entity_profiles import get_profiles_by_type, slugify_profile_id
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from .coordinator import AdsPlcCoordinator
 
 INTEGER_TYPES = {"BYTE", "WORD", "DWORD", "INT", "DINT"}
 ATTR_BRIGHTNESS = light_comp.ATTR_BRIGHTNESS
 ATTR_COLOR_TEMP = getattr(light_comp, "ATTR_COLOR_TEMP", "color_temp")
-ATTR_COLOR_TEMP_KELVIN = getattr(light_comp, "ATTR_COLOR_TEMP_KELVIN", "color_temp_kelvin")
+ATTR_COLOR_TEMP_KELVIN = getattr(
+    light_comp, "ATTR_COLOR_TEMP_KELVIN", "color_temp_kelvin"
+)
 
 
 async def async_setup_entry(
@@ -113,21 +119,21 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
         value = self._read_value(self._color_temp)
         if value is None:
             return None
-        return int(round(float(value)))
+        return round(float(value))
 
     @property
     def min_color_temp_kelvin(self) -> int | None:
         """Palauta alin sallittu valolämpötila kelvineinä."""
         if not self._color_temp:
             return None
-        return int(round(float(self._color_temp[PROFILE_KEY_MIN])))
+        return round(float(self._color_temp[PROFILE_KEY_MIN]))
 
     @property
     def max_color_temp_kelvin(self) -> int | None:
         """Palauta ylin sallittu valolämpötila kelvineinä."""
         if not self._color_temp:
             return None
-        return int(round(float(self._color_temp[PROFILE_KEY_MAX])))
+        return round(float(self._color_temp[PROFILE_KEY_MAX]))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Kytke valo päälle ja aseta mahdolliset parametrit."""
@@ -145,7 +151,7 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
             if kelvin is None and ATTR_COLOR_TEMP in kwargs:
                 mired = int(kwargs[ATTR_COLOR_TEMP])
                 if mired > 0:
-                    kelvin = int(round(1_000_000 / mired))
+                    kelvin = round(1_000_000 / mired)
             if kelvin is not None:
                 kelvin_value = self._clamp(
                     float(kelvin),
@@ -154,12 +160,12 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
                 )
                 await self._write_value(self._color_temp, kelvin_value)
 
-        await self._write_value(self._on_off, True)
+        await self._write_value(self._on_off, value=True)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **_kwargs: Any) -> None:
         """Kytke valo pois päältä."""
-        await self._write_value(self._on_off, False)
+        await self._write_value(self._on_off, value=False)
         self.async_write_ha_state()
 
     def _read_value(self, point: dict[str, Any]) -> Any:
@@ -183,7 +189,7 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
     @staticmethod
     def _cast_for_type(value: Any, var_type: str) -> Any:
         if var_type in INTEGER_TYPES:
-            return int(round(float(value)))
+            return round(float(value))
         if var_type == "BOOL":
             return bool(value)
         return float(value)
@@ -193,7 +199,7 @@ class AdsPlcLight(CoordinatorEntity, LightEntity):
         if max_value <= min_value:
             return 0
         normalized = (value - min_value) / (max_value - min_value)
-        return int(round(AdsPlcLight._clamp(normalized, 0.0, 1.0) * 255))
+        return round(AdsPlcLight._clamp(normalized, 0.0, 1.0) * 255)
 
     @staticmethod
     def _scale_from_ha(value: int, min_value: float, max_value: float) -> float:

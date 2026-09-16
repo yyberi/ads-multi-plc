@@ -1,14 +1,13 @@
-"""Config flow – lisää uusi PLC Home Assistantin käyttöliittymästä."""
+"""Config flow - lisää uusi PLC Home Assistantin käyttöliittymästä."""
+
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .ads_connection import test_connection
@@ -16,36 +15,39 @@ from .const import (
     CONF_AMS_NET_ID,
     CONF_ASYNC_READ,
     CONF_DEVICE_PROFILES,
+    CONF_ENABLE_ROUTE,
     CONF_IP_ADDRESS,
     CONF_IP_PORT,
     CONF_PLC_NAME,
     CONF_PROFILE_TYPE,
-    CONF_VARIABLES,
-    CONF_ENABLE_ROUTE,
-    CONF_SENDER_AMS,
-    CONF_ROUTE_USERNAME,
-    CONF_ROUTE_PASSWORD,
     CONF_ROUTE_NAME,
+    CONF_ROUTE_PASSWORD,
     CONF_ROUTE_PASSWORD_SECRET,
+    CONF_ROUTE_USERNAME,
+    CONF_SENDER_AMS,
+    CONF_VARIABLES,
+    DEFAULT_PORT,
+    DEFAULT_SETTINGS_FILE,
+    DOMAIN,
     LIGHT_KEY_BRIGHTNESS,
     LIGHT_KEY_COLOR_TEMP,
     LIGHT_KEY_ON_OFF,
-    DEFAULT_SETTINGS_FILE,
-    DEFAULT_PORT,
-    DOMAIN,
-    PROFILE_KEY_MAX,
     PROFILE_KEY_ID,
+    PROFILE_KEY_MAX,
     PROFILE_KEY_MIN,
     PROFILE_KEY_NAME,
     PROFILE_KEY_TYPE,
     PROFILE_TYPE_LIGHT,
     SERVICE_EXPORT_SETTINGS,
-    SERVICE_IMPORT_SETTINGS,
     SERVICE_FIELD_FILE_PATH,
     SERVICE_FIELD_OVERWRITE_EXISTING,
+    SERVICE_IMPORT_SETTINGS,
 )
 from .entity_profiles import ensure_profile_ids, slugify_profile_id
 from .helpers import normalize_variables, resolve_sender_ams
+
+if TYPE_CHECKING:
+    from homeassistant.data_entry_flow import FlowResult
 
 # AMS Net ID -formaatti: x.x.x.x.x.x (kuusi numeroa pisteiden välissä)
 AMS_NET_ID_PATTERN = re.compile(
@@ -145,7 +147,7 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_ROUTE_NAME: user_input.get(CONF_ROUTE_NAME, ""),
                         CONF_ROUTE_USERNAME: username,
                         CONF_ROUTE_PASSWORD: password,
-                    }
+                    },
                 )
                 if not can_connect:
                     errors["base"] = "cannot_connect"
@@ -178,7 +180,9 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_import(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_import(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Luo config entry YAML-importista."""
         if user_input is None:
             return self.async_abort(reason="invalid_import")
@@ -198,12 +202,16 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_IP_ADDRESS: ip_address,
             CONF_IP_PORT: int(user_input.get(CONF_IP_PORT, DEFAULT_PORT)),
             CONF_VARIABLES: normalize_variables(user_input.get(CONF_VARIABLES, [])),
-            CONF_DEVICE_PROFILES: ensure_profile_ids(user_input.get(CONF_DEVICE_PROFILES, [])),
+            CONF_DEVICE_PROFILES: ensure_profile_ids(
+                user_input.get(CONF_DEVICE_PROFILES, [])
+            ),
             CONF_ENABLE_ROUTE: bool(user_input.get(CONF_ENABLE_ROUTE, False)),
             CONF_ROUTE_NAME: str(user_input.get(CONF_ROUTE_NAME, "")),
             CONF_ROUTE_USERNAME: str(user_input.get(CONF_ROUTE_USERNAME, "")).strip(),
             CONF_ROUTE_PASSWORD: str(user_input.get(CONF_ROUTE_PASSWORD, "")).strip(),
-            CONF_SENDER_AMS: str(user_input.get(CONF_SENDER_AMS) or resolve_sender_ams(ip_address)),
+            CONF_SENDER_AMS: str(
+                user_input.get(CONF_SENDER_AMS) or resolve_sender_ams(ip_address)
+            ),
         }
         secret_key = str(user_input.get(CONF_ROUTE_PASSWORD_SECRET, "")).strip()
         if secret_key:
@@ -216,7 +224,9 @@ class AdsMultiConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,  # noqa: ARG004 - HA callback signature.
+    ) -> AdsMultiOptionsFlow:
         """Palauta options flow muuttujien hallintaan."""
         return AdsMultiOptionsFlow()
 
@@ -225,7 +235,8 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
     """Options flow: hallinnoi muuttujia jälkikäteen."""
 
     async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002 - HA flow callback.
     ) -> FlowResult:
         """Päävalikko: valitse toiminto."""
         # Alustetaan tässä koska __init__ ei ole käytössä uusissa HA-versioissa
@@ -240,12 +251,15 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 or self.config_entry.data.get(CONF_DEVICE_PROFILES, [])
             )
 
-        names = ", ".join(v["name"] for v in self._variables) or "–"
-        lights = ", ".join(
-            p.get(PROFILE_KEY_NAME, "")
-            for p in self._device_profiles
-            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
-        ) or "–"
+        names = ", ".join(v["name"] for v in self._variables) or "-"
+        lights = (
+            ", ".join(
+                p.get(PROFILE_KEY_NAME, "")
+                for p in self._device_profiles
+                if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+            )
+            or "-"
+        )
         return self.async_show_menu(
             step_id="init",
             menu_options={
@@ -263,7 +277,8 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_finish(
-        self, user_input: dict[str, Any] | None = None
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002 - HA flow callback.
     ) -> FlowResult:
         """Tallenna asetukset ja sulje options flow."""
         return await self._save_and_finish()
@@ -319,7 +334,12 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="manage_route",
             data_schema=ROUTE_CONFIG_SCHEMA.extend(
-                {vol.Optional(CONF_ENABLE_ROUTE, default=current_route_config[CONF_ENABLE_ROUTE]): bool}
+                {
+                    vol.Optional(
+                        CONF_ENABLE_ROUTE,
+                        default=current_route_config[CONF_ENABLE_ROUTE],
+                    ): bool
+                }
             ),
             errors=errors,
             description_placeholders={
@@ -356,7 +376,9 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
-            description_placeholders={"default_path": f"/config/{DEFAULT_SETTINGS_FILE}"},
+            description_placeholders={
+                "default_path": f"/config/{DEFAULT_SETTINGS_FILE}"
+            },
         )
 
     async def async_step_import_settings(
@@ -366,7 +388,9 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             file_path = str(user_input.get(SERVICE_FIELD_FILE_PATH, "")).strip()
-            overwrite_existing = bool(user_input.get(SERVICE_FIELD_OVERWRITE_EXISTING, True))
+            overwrite_existing = bool(
+                user_input.get(SERVICE_FIELD_OVERWRITE_EXISTING, True)
+            )
             service_data: dict[str, Any] = {
                 SERVICE_FIELD_OVERWRITE_EXISTING: overwrite_existing,
             }
@@ -392,7 +416,9 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
-            description_placeholders={"default_path": f"/config/{DEFAULT_SETTINGS_FILE}"},
+            description_placeholders={
+                "default_path": f"/config/{DEFAULT_SETTINGS_FILE}"
+            },
         )
 
     async def async_step_add_variable(
@@ -421,7 +447,9 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
         """Poista muuttuja."""
         if user_input is not None:
             name_to_remove = user_input.get("variable_name")
-            self._variables = [v for v in self._variables if v["name"] != name_to_remove]
+            self._variables = [
+                v for v in self._variables if v["name"] != name_to_remove
+            ]
             return await self._save_and_finish()
 
         names = [v["name"] for v in self._variables]
@@ -430,9 +458,7 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="remove_variable",
-            data_schema=vol.Schema(
-                {vol.Required("variable_name"): vol.In(names)}
-            ),
+            data_schema=vol.Schema({vol.Required("variable_name"): vol.In(names)}),
         )
 
     async def async_step_add_light(
@@ -460,7 +486,8 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
         light_names = [
             str(p.get(PROFILE_KEY_NAME))
             for p in self._device_profiles
-            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT and p.get(PROFILE_KEY_NAME)
+            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+            and p.get(PROFILE_KEY_NAME)
         ]
         if not light_names:
             return await self.async_step_init()
@@ -508,16 +535,36 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required("profile_name", default=defaults["profile_name"]): str,
-                    vol.Required("on_off_symbol", default=defaults["on_off_symbol"]): str,
-                    vol.Optional("on_off_type", default=defaults["on_off_type"]): vol.In(["BOOL"]),
-                    vol.Optional("brightness_symbol", default=defaults["brightness_symbol"]): str,
-                    vol.Optional("brightness_type", default=defaults["brightness_type"]): vol.In(LIGHT_NUMERIC_TYPES),
-                    vol.Optional("brightness_min", default=defaults["brightness_min"]): vol.Coerce(float),
-                    vol.Optional("brightness_max", default=defaults["brightness_max"]): vol.Coerce(float),
-                    vol.Optional("color_temp_symbol", default=defaults["color_temp_symbol"]): str,
-                    vol.Optional("color_temp_type", default=defaults["color_temp_type"]): vol.In(LIGHT_NUMERIC_TYPES),
-                    vol.Optional("color_temp_min", default=defaults["color_temp_min"]): vol.Coerce(float),
-                    vol.Optional("color_temp_max", default=defaults["color_temp_max"]): vol.Coerce(float),
+                    vol.Required(
+                        "on_off_symbol", default=defaults["on_off_symbol"]
+                    ): str,
+                    vol.Optional(
+                        "on_off_type", default=defaults["on_off_type"]
+                    ): vol.In(["BOOL"]),
+                    vol.Optional(
+                        "brightness_symbol", default=defaults["brightness_symbol"]
+                    ): str,
+                    vol.Optional(
+                        "brightness_type", default=defaults["brightness_type"]
+                    ): vol.In(LIGHT_NUMERIC_TYPES),
+                    vol.Optional(
+                        "brightness_min", default=defaults["brightness_min"]
+                    ): vol.Coerce(float),
+                    vol.Optional(
+                        "brightness_max", default=defaults["brightness_max"]
+                    ): vol.Coerce(float),
+                    vol.Optional(
+                        "color_temp_symbol", default=defaults["color_temp_symbol"]
+                    ): str,
+                    vol.Optional(
+                        "color_temp_type", default=defaults["color_temp_type"]
+                    ): vol.In(LIGHT_NUMERIC_TYPES),
+                    vol.Optional(
+                        "color_temp_min", default=defaults["color_temp_min"]
+                    ): vol.Coerce(float),
+                    vol.Optional(
+                        "color_temp_max", default=defaults["color_temp_max"]
+                    ): vol.Coerce(float),
                 }
             ),
             errors=errors,
@@ -530,7 +577,8 @@ class AdsMultiOptionsFlow(config_entries.OptionsFlow):
         light_names = [
             str(p.get(PROFILE_KEY_NAME))
             for p in self._device_profiles
-            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT and p.get(PROFILE_KEY_NAME)
+            if p.get(CONF_PROFILE_TYPE) == PROFILE_TYPE_LIGHT
+            and p.get(PROFILE_KEY_NAME)
         ]
         if not light_names:
             return await self._save_and_finish()

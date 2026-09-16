@@ -1,19 +1,22 @@
 """DataUpdateCoordinator yhdelle Beckhoff PLC -yhteydelle."""
+
 from __future__ import annotations
 
 import ctypes
-from datetime import timedelta
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pyads
-
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .ads_connection import ads_type
 from .const import CONF_ASYNC_READ, PROFILE_TYPE_LIGHT
 from .entity_profiles import collect_profile_points, get_profiles_by_type
+
+if TYPE_CHECKING:
+    from datetime import timedelta
+
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +24,8 @@ _LOGGER = logging.getLogger(__name__)
 class AdsPlcCoordinator(DataUpdateCoordinator):
     """Koordinaattori yhdelle Beckhoff PLC:lle."""
 
-    def __init__(
+    # Explicit PLC connection and read configuration are kept together.
+    def __init__(  # noqa: PLR0913
         self,
         hass: HomeAssistant,
         plc: pyads.Connection,
@@ -44,8 +48,8 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
         self.variables = variables
         self.device_profiles = device_profiles
         self.read_points = self._build_read_points(variables, device_profiles)
-        self.poll_read_points, self._configured_async_read_points = self._split_read_points(
-            self.read_points
+        self.poll_read_points, self._configured_async_read_points = (
+            self._split_read_points(self.read_points)
         )
         self._read_point_type_by_name = {
             str(point["name"]): str(point["type"]).upper() for point in self.read_points
@@ -99,9 +103,12 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
                 self._failed_async_subscriptions.add(point["name"])
             return
 
-        if not hasattr(pyads, "NotificationAttrib") or not hasattr(self.plc, "notification"):
+        if not hasattr(pyads, "NotificationAttrib") or not hasattr(
+            self.plc, "notification"
+        ):
             _LOGGER.warning(
-                "PLC '%s': pyads NotificationAttrib/decorator puuttuu, käytetään polling-luentaa.",
+                "PLC '%s': pyads NotificationAttrib/decorator puuttuu, "
+                "käytetään polling-luentaa.",
                 self.plc_name,
             )
             for point in self._configured_async_read_points:
@@ -119,27 +126,34 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
 
                 @decorator
                 def _notification_callback(
-                    handle,
-                    name,
-                    timestamp,
-                    value,
+                    _handle: int,
+                    _name: str,
+                    _timestamp: Any,
+                    value: Any,
                     _var_name: str = var_name,
-                ):
+                ) -> None:
                     self._schedule_notification_update(_var_name, value)
 
-                handles = self.plc.add_device_notification(var_name, attr, _notification_callback)
+                handles = self.plc.add_device_notification(
+                    var_name, attr, _notification_callback
+                )
                 if isinstance(handles, tuple):
                     notification_handle = int(handles[0])
                     user_handle = int(handles[1]) if len(handles) > 1 else 0
                 else:
                     notification_handle, user_handle = int(handles), 0
 
-                self._notification_handles[var_name] = (notification_handle, user_handle)
+                self._notification_handles[var_name] = (
+                    notification_handle,
+                    user_handle,
+                )
                 self._notification_callbacks[var_name] = _notification_callback
 
                 try:
-                    self._async_values[var_name] = self.plc.read_by_name(var_name, plc_type)
-                except Exception as read_err:  # pylint: disable=broad-exception-caught
+                    self._async_values[var_name] = self.plc.read_by_name(
+                        var_name, plc_type
+                    )
+                except Exception as read_err:  # noqa: BLE001 - Notifications may still deliver values.
                     _LOGGER.debug(
                         "PLC '%s': async-muuttujan '%s' alkuarvon luku epäonnistui: %s",
                         self.plc_name,
@@ -152,11 +166,12 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
                     var_name,
                     var_type,
                 )
-            except Exception as err:  # pylint: disable=broad-exception-caught
+            except Exception as err:  # noqa: BLE001 - Isolate subscription failures per variable.
                 self._failed_async_subscriptions.add(var_name)
                 self._register_poll_fallback(point)
                 _LOGGER.warning(
-                    "PLC '%s': async-tilauksen luonti epäonnistui muuttujalle '%s': %s. "
+                    "PLC '%s': async-tilauksen luonti epäonnistui "
+                    "muuttujalle '%s': %s. "
                     "Käytetään pollingia tälle muuttujalle.",
                     self.plc_name,
                     var_name,
@@ -168,9 +183,10 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
         for var_name, handles in list(self._notification_handles.items()):
             try:
                 self.plc.del_device_notification(*handles)
-            except Exception as err:  # pylint: disable=broad-exception-caught
+            except Exception as err:  # noqa: BLE001 - Isolate subscription failures per variable.
                 _LOGGER.warning(
-                    "PLC '%s': async-tilauksen vapautus epäonnistui muuttujalle '%s': %s",
+                    "PLC '%s': async-tilauksen vapautus epäonnistui "
+                    "muuttujalle '%s': %s",
                     self.plc_name,
                     var_name,
                     err,
@@ -192,7 +208,7 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
         """Laske ilmoituksen tavumäärä PLC-tyypille."""
         try:
             return ctypes.sizeof(plc_type)
-        except Exception:  # pylint: disable=broad-exception-caught
+        except Exception:  # noqa: BLE001 - Preserve fallback for unsupported ctypes types.
             return 4
 
     def _schedule_notification_update(self, var_name: str, value: Any) -> None:
@@ -231,25 +247,31 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
         if isinstance(value, bool):
             return value
         if isinstance(value, (bytes, bytearray)):
-            if not value:
-                return False
-            return bool(value[0])
+            return bool(value and value[0])
         if isinstance(value, str):
             normalized = value.strip().lower()
-            if normalized in {"true", "1", "on"}:
-                return True
-            if normalized in {"false", "0", "off", ""}:
-                return False
+            known_values = {
+                "true": True,
+                "1": True,
+                "on": True,
+                "false": False,
+                "0": False,
+                "off": False,
+                "": False,
+            }
+            if normalized in known_values:
+                return known_values[normalized]
         if hasattr(value, "value"):
             return AdsPlcCoordinator._normalize_bool_value(value.value)
         return bool(value)
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Päivitä data: synkroniset muuttujat pollingilla, asyncit notificationeilla."""
+        """Päivitä data pollingilla ja ADS-notificationeilla."""
         try:
             return await self.hass.async_add_executor_job(self._read_polled_variables)
         except pyads.ADSError as err:
-            raise UpdateFailed(f"PLC '{self.plc_name}' lukuvirhe: {err}") from err
+            msg = f"PLC '{self.plc_name}' lukuvirhe: {err}"
+            raise UpdateFailed(msg) from err
 
     def _read_polled_variables(self) -> dict[str, Any]:
         """Synkroninen polling-luku executor-säikeessä."""
@@ -331,7 +353,10 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
         poll_points: list[dict[str, str]] = []
         async_points: list[dict[str, str]] = []
         for point in points:
-            normalized = {"name": str(point["name"]), "type": str(point["type"]).upper()}
+            normalized = {
+                "name": str(point["name"]),
+                "type": str(point["type"]).upper(),
+            }
             if bool(point.get(CONF_ASYNC_READ, False)):
                 async_points.append(normalized)
             else:

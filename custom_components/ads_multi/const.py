@@ -15,9 +15,9 @@ CONF_DEVICE_PROFILES = "device_profiles"
 CONF_ENABLE_ROUTE = "enable_route_config"
 CONF_SENDER_AMS = "sender_ams"
 CONF_ROUTE_USERNAME = "route_username"
-CONF_ROUTE_PASSWORD = "route_password"
+CONF_ROUTE_PASSWORD = "route_password"  # noqa: S105 - Configuration key, not a password.
 CONF_ROUTE_NAME = "route_name"
-CONF_ROUTE_PASSWORD_SECRET = "route_password_secret"
+CONF_ROUTE_PASSWORD_SECRET = "route_password_secret"  # noqa: S105 - Configuration key.
 
 # Profiilipohjaiset laitteet
 CONF_PROFILE_TYPE = "profile_type"

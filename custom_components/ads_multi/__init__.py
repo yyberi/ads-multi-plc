@@ -1,14 +1,12 @@
 """Beckhoff ADS Multi-PLC integraatio Home Assistantille."""
+
 from __future__ import annotations
 
-from datetime import timedelta
 import logging
-from typing import Any
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any
 
 import pyads
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
@@ -42,12 +40,19 @@ from .helpers import (
 )
 from .settings import async_export_settings_to_yaml, async_register_settings_services
 
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
-async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+async def async_setup(
+    hass: HomeAssistant,
+    config: dict[str, Any],  # noqa: ARG001 - HA setup callback signature.
+) -> bool:
     """Alusta integraation domain-tason palvelut."""
     domain_state(hass)
     await async_register_settings_services(hass)
@@ -66,16 +71,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     ip_address = entry.data[CONF_IP_ADDRESS]
     ip_port = entry.data.get(CONF_IP_PORT, DEFAULT_PORT)
     local_ip = resolve_local_ip(ip_address)
-    sender_ams = (
-        effective_option(entry, CONF_SENDER_AMS, "")
-        or sender_ams_from_ip(local_ip)
+    sender_ams = effective_option(entry, CONF_SENDER_AMS, "") or sender_ams_from_ip(
+        local_ip
     )
     variables = normalize_variables(effective_option(entry, CONF_VARIABLES, []) or [])
     device_profiles = ensure_profile_ids(
         effective_option(entry, CONF_DEVICE_PROFILES, []) or []
     )
     route_config = {
-        CONF_ENABLE_ROUTE: effective_option(entry, CONF_ENABLE_ROUTE, False),
+        CONF_ENABLE_ROUTE: effective_option(entry, CONF_ENABLE_ROUTE, default=False),
         CONF_SENDER_AMS: sender_ams,
         CONF_ROUTE_NAME: effective_option(entry, CONF_ROUTE_NAME, ""),
         CONF_ROUTE_USERNAME: effective_option(entry, CONF_ROUTE_USERNAME, ""),
@@ -91,9 +95,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             route_config,
         )
     except pyads.ADSError as err:
-        raise ConfigEntryNotReady(
-            f"Ei saada yhteyttä PLC:hen '{plc_name}' ({ams_net_id}): {err}"
-        ) from err
+        msg = f"Ei saada yhteyttä PLC:hen '{plc_name}' ({ams_net_id}): {err}"
+        raise ConfigEntryNotReady(msg) from err
 
     coordinator = AdsPlcCoordinator(
         hass=hass,
@@ -131,7 +134,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not state.get(AUTO_EXPORT_GUARD_KEY, False):
         try:
             await async_export_settings_to_yaml(hass)
-        except Exception as err:  # pylint: disable=broad-exception-caught
+        except Exception as err:  # noqa: BLE001 - Optional export must not stop setup/reload.
             _LOGGER.warning("Asetusten automaattinen YAML-vienti epäonnistui: %s", err)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -144,7 +147,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if not state.get(AUTO_EXPORT_GUARD_KEY, False):
         try:
             await async_export_settings_to_yaml(hass)
-        except Exception as err:  # pylint: disable=broad-exception-caught
+        except Exception as err:  # noqa: BLE001 - Optional export must not stop setup/reload.
             _LOGGER.warning("Asetusten automaattinen YAML-vienti epäonnistui: %s", err)
     await hass.config_entries.async_reload(entry.entry_id)
 

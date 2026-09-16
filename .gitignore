@@ -19,3 +19,10 @@ coverage.xml
 config/*
 !config/configuration.yaml
 .DS_Store
+
+# Local credentials, PLC configuration, and private publication backups
+.env
+.env.*
+!.env.example
+pyAdsTest/plc_config.yaml
+.private-publication/

@@ -56,6 +56,17 @@ Home Assistant instance running and already configured with the included
 [`configuration.yaml`](./config/configuration.yaml)
 file.
 
+## GitHub validation
+
+Hassfest validates the integration on both private and public repositories.
+HACS validation runs only when the repository is public because HACS downloads
+the manifests from public GitHub raw URLs. A skipped HACS job on a private
+repository does not mean the integration has passed HACS validation.
+
+Before publishing, add repository topics through GitHub's **About** settings
+(for example `home-assistant`, `hacs`, `beckhoff`, and `ads`). HACS requires
+repository topics; these are GitHub metadata, not fields in `hacs.json`.
+
 ## Maintaining the integration blueprint
 
 Follow the [blueprint origin and update instructions](blueprint_reference/README.md)

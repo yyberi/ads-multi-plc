@@ -1,0 +1,16 @@
+# Documentation-only addresses: replace before connecting to a real PLC.
+plcs:
+  - name: PLC1
+    ip: 192.0.2.10
+    ams: 192.0.2.10.1.1
+    host: 192.0.2.10
+
+variable_polls:
+  - plc_name: PLC1
+    topic: example/plc/measurements
+    name: measurements
+    interval_seconds: 10.0
+    allow_partial: true
+    variables:
+      - name: temperature
+        symbol: MAIN.Temperature

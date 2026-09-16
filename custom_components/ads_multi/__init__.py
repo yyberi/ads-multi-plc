@@ -10,6 +10,7 @@ import pyads
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 
 from .ads_connection import create_plc_connection, get_pyads_version
 from .const import (
@@ -42,6 +43,8 @@ from .helpers import (
 from .settings import async_export_settings_to_yaml, async_register_settings_services
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:

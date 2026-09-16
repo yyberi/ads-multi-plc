@@ -27,6 +27,9 @@ jobs:
 
   hacs: # https://github.com/hacs/action
     name: HACS validation
+    # HACS downloads manifests from public raw.githubusercontent.com URLs.
+    # Hassfest still validates the checked-out integration in private repositories.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository

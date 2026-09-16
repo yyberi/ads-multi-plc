@@ -71,9 +71,12 @@ This project reads all configuration from a `.env` file.
 
 ```bash
 cp .env.example .env
+cp plc_config.example.yaml plc_config.yaml
 ```
 
-2) Edit `.env` to match your network and PLCs.
+2) Edit `.env` and `plc_config.yaml` to match your network and PLCs.
+Both local files are ignored by Git. The templates contain no credentials;
+their documentation-only addresses must be replaced before use.
 
 ### PLC Connection Settings (.env)
 
@@ -84,7 +87,7 @@ The `.env.example` shows the full set of required variables:
 - `ROUTE_NAME`
 - `PLC_CONFIG_FILE` (path to the PLC config YAML, default `plc_config.yaml`)
 
-The PLC config file is a YAML mapping with `plcs` and `variable_polls` lists. See `plc_config.yaml` for a full example.
+The PLC config file is a YAML mapping with `plcs` and `variable_polls` lists. See `plc_config.example.yaml` for an example.
 
 Parameters:
 - `plc_name`: Name of the PLC (must match PLCS config)

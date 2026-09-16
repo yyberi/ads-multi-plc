@@ -58,10 +58,9 @@ file.
 
 ## GitHub validation
 
-Hassfest validates the integration on both private and public repositories.
-HACS validation runs only when the repository is public because HACS downloads
-the manifests from public GitHub raw URLs. A skipped HACS job on a private
-repository does not mean the integration has passed HACS validation.
+Hassfest and HACS validation run on pushes and pull requests to `main`, on the
+daily schedule, and through manual workflow dispatch. HACS downloads the
+manifests from public GitHub raw URLs, so the repository must remain public.
 
 Before publishing, add repository topics through GitHub's **About** settings
 (for example `home-assistant`, `hacs`, `beckhoff`, and `ads`). HACS requires

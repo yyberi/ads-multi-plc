@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker CLI is missing. In VS Code, run 'Dev Containers: Rebuild Container'" >&2
+    echo "to install the project's Docker feature, or run this script on the Docker host." >&2
+    exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+    echo "Docker Compose is missing. Rebuild the devcontainer or install Docker Compose on the host." >&2
+    exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+    echo "Cannot connect to Docker. Start Docker on the host and check socket access." >&2
+    exit 1
+fi
+
+export PYADS_ARCH="${PYADS_ARCH:-amd64}"
+case "$PYADS_ARCH" in
+    amd64) export PYADS_DOCKER_ARCH=amd64 ;;
+    aarch64) export PYADS_DOCKER_ARCH=arm64 ;;
+    *) echo "PYADS_ARCH must be amd64 or aarch64" >&2; exit 1 ;;
+esac
+
+"${PYTHON_BIN:-python3}" scripts/prepare-pyads-lab.py --arch "$PYADS_ARCH"
+docker compose -f compose.pyads-lab.yaml up --build --detach --force-recreate
+echo "Home Assistant: http://localhost:${PYADS_HA_PORT:-28123} (pyads 3.6.0, $PYADS_ARCH)"

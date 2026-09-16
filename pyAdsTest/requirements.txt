@@ -1,4 +1,4 @@
-pyads
+pyads==3.6.0
 python-dotenv
 paho-mqtt
 pyyaml

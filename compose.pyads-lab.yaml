@@ -1,0 +1,14 @@
+name: ads-multi-dev
+services:
+  homeassistant:
+    platform: linux/${PYADS_DOCKER_ARCH:-amd64}
+    build:
+      context: .pyads-lab/${PYADS_ARCH:-amd64}/build
+      dockerfile: ../../../pyads-lab.Dockerfile
+    ports:
+      - "127.0.0.1:${PYADS_HA_PORT:-28123}:8123"
+    volumes:
+      - ${PYADS_HOST_WORKSPACE:-.}/.pyads-lab/${PYADS_ARCH:-amd64}/config:/config
+      - ${PYADS_HOST_WORKSPACE:-.}/.pyads-lab/${PYADS_ARCH:-amd64}/build/ads_multi:/config/custom_components/ads_multi:ro
+    environment:
+      TZ: Europe/Helsinki

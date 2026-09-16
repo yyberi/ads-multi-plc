@@ -4,7 +4,9 @@ __pycache__
 *.egg-info
 */build/*
 */dist/*
-
+pyAds-build/*
+.pyads-lab/
+.pyads-deploy/
 
 # misc
 .coverage

@@ -24,7 +24,7 @@ Each PLC is added as its own config entry and appears as a separate device with 
 ## Requirements
 
 - Home Assistant 2023.1+
-- `pyads >= 3.3.9` (installed automatically via `manifest.json`)
+- `pyads == 3.6.0` (installed automatically via `manifest.json`)
 - Network access to your PLC(s)
 - ADS route configured, or credentials available for automatic route setup
 

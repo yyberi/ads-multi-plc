@@ -5,7 +5,7 @@
   "documentation": "https://github.com/yyberi/HA-multi-ads-integration",
   "issue_tracker": "https://github.com/yyberi/HA-multi-ads-integration/issues",
   "requirements": [
-    "pyads==3.4.0"
+    "pyads==3.6.0"
   ],
   "dependencies": [],
   "codeowners": [

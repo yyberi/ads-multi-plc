@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+from threading import RLock
 from typing import TYPE_CHECKING, Any
 
 import pyads
@@ -43,6 +44,9 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
             update_interval=update_interval,
         )
         self.plc = plc
+        # All synchronous connection operations run in executor threads.
+        # Notification callbacks only schedule updates and must not take this lock.
+        self._plc_lock = RLock()
         self.plc_name = plc_name
         self.ams_net_id = ams_net_id
         self.variables = variables
@@ -91,109 +95,113 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
 
     def _setup_notifications(self) -> None:
         """Luo ADS notificationit synkronisesti executor-säikeessä."""
-        if not hasattr(self.plc, "add_device_notification") or not hasattr(
-            self.plc, "del_device_notification"
-        ):
-            _LOGGER.warning(
-                "PLC '%s': pyads notification API puuttuu, käytetään polling-luentaa.",
-                self.plc_name,
-            )
-            for point in self._configured_async_read_points:
-                self._register_poll_fallback(point)
-                self._failed_async_subscriptions.add(point["name"])
-            return
-
-        if not hasattr(pyads, "NotificationAttrib") or not hasattr(
-            self.plc, "notification"
-        ):
-            _LOGGER.warning(
-                "PLC '%s': pyads NotificationAttrib/decorator puuttuu, "
-                "käytetään polling-luentaa.",
-                self.plc_name,
-            )
-            for point in self._configured_async_read_points:
-                self._register_poll_fallback(point)
-                self._failed_async_subscriptions.add(point["name"])
-            return
-
-        for point in self._configured_async_read_points:
-            var_name = point["name"]
-            var_type = point["type"]
-            plc_type = ads_type(var_type)
-            try:
-                attr = pyads.NotificationAttrib(self._notification_size(plc_type))
-                decorator = self.plc.notification(plc_type)
-
-                @decorator
-                def _notification_callback(
-                    _handle: int,
-                    _name: str,
-                    _timestamp: Any,
-                    value: Any,
-                    _var_name: str = var_name,
-                ) -> None:
-                    self._schedule_notification_update(_var_name, value)
-
-                handles = self.plc.add_device_notification(
-                    var_name, attr, _notification_callback
+        with self._plc_lock:
+            if not hasattr(self.plc, "add_device_notification") or not hasattr(
+                self.plc, "del_device_notification"
+            ):
+                _LOGGER.warning(
+                    "PLC '%s': pyads notification API puuttuu, "
+                    "käytetään polling-luentaa.",
+                    self.plc_name,
                 )
-                if isinstance(handles, tuple):
-                    notification_handle = int(handles[0])
-                    user_handle = int(handles[1]) if len(handles) > 1 else 0
-                else:
-                    notification_handle, user_handle = int(handles), 0
+                for point in self._configured_async_read_points:
+                    self._register_poll_fallback(point)
+                    self._failed_async_subscriptions.add(point["name"])
+                return
 
-                self._notification_handles[var_name] = (
-                    notification_handle,
-                    user_handle,
+            if not hasattr(pyads, "NotificationAttrib") or not hasattr(
+                self.plc, "notification"
+            ):
+                _LOGGER.warning(
+                    "PLC '%s': pyads NotificationAttrib/decorator puuttuu, "
+                    "käytetään polling-luentaa.",
+                    self.plc_name,
                 )
-                self._notification_callbacks[var_name] = _notification_callback
+                for point in self._configured_async_read_points:
+                    self._register_poll_fallback(point)
+                    self._failed_async_subscriptions.add(point["name"])
+                return
 
+            for point in self._configured_async_read_points:
+                var_name = point["name"]
+                var_type = point["type"]
+                plc_type = ads_type(var_type)
                 try:
-                    self._async_values[var_name] = self.plc.read_by_name(
-                        var_name, plc_type
+                    attr = pyads.NotificationAttrib(self._notification_size(plc_type))
+                    decorator = self.plc.notification(plc_type)
+
+                    @decorator
+                    def _notification_callback(
+                        _handle: int,
+                        _name: str,
+                        _timestamp: Any,
+                        value: Any,
+                        _var_name: str = var_name,
+                    ) -> None:
+                        self._schedule_notification_update(_var_name, value)
+
+                    handles = self.plc.add_device_notification(
+                        var_name, attr, _notification_callback
                     )
-                except Exception as read_err:  # noqa: BLE001 - Notifications may still deliver values.
+                    if isinstance(handles, tuple):
+                        notification_handle = int(handles[0])
+                        user_handle = int(handles[1]) if len(handles) > 1 else 0
+                    else:
+                        notification_handle, user_handle = int(handles), 0
+
+                    self._notification_handles[var_name] = (
+                        notification_handle,
+                        user_handle,
+                    )
+                    self._notification_callbacks[var_name] = _notification_callback
+
+                    try:
+                        self._async_values[var_name] = self.plc.read_by_name(
+                            var_name, plc_type
+                        )
+                    except Exception as read_err:  # noqa: BLE001 - Notifications may still deliver values.
+                        _LOGGER.debug(
+                            "PLC '%s': async-muuttujan '%s' "
+                            "alkuarvon luku epäonnistui: %s",
+                            self.plc_name,
+                            var_name,
+                            read_err,
+                        )
                     _LOGGER.debug(
-                        "PLC '%s': async-muuttujan '%s' alkuarvon luku epäonnistui: %s",
+                        "PLC '%s': async-tilaus luotu muuttujalle '%s' (type=%s).",
                         self.plc_name,
                         var_name,
-                        read_err,
+                        var_type,
                     )
-                _LOGGER.debug(
-                    "PLC '%s': async-tilaus luotu muuttujalle '%s' (type=%s).",
-                    self.plc_name,
-                    var_name,
-                    var_type,
-                )
-            except Exception as err:  # noqa: BLE001 - Isolate subscription failures per variable.
-                self._failed_async_subscriptions.add(var_name)
-                self._register_poll_fallback(point)
-                _LOGGER.warning(
-                    "PLC '%s': async-tilauksen luonti epäonnistui "
-                    "muuttujalle '%s': %s. "
-                    "Käytetään pollingia tälle muuttujalle.",
-                    self.plc_name,
-                    var_name,
-                    err,
-                )
+                except Exception as err:  # noqa: BLE001 - Isolate subscription failures per variable.
+                    self._failed_async_subscriptions.add(var_name)
+                    self._register_poll_fallback(point)
+                    _LOGGER.warning(
+                        "PLC '%s': async-tilauksen luonti epäonnistui "
+                        "muuttujalle '%s': %s. "
+                        "Käytetään pollingia tälle muuttujalle.",
+                        self.plc_name,
+                        var_name,
+                        err,
+                    )
 
     def _release_notifications(self) -> None:
         """Poista ADS notificationit synkronisesti executor-säikeessä."""
-        for var_name, handles in list(self._notification_handles.items()):
-            try:
-                self.plc.del_device_notification(*handles)
-            except Exception as err:  # noqa: BLE001 - Isolate subscription failures per variable.
-                _LOGGER.warning(
-                    "PLC '%s': async-tilauksen vapautus epäonnistui "
-                    "muuttujalle '%s': %s",
-                    self.plc_name,
-                    var_name,
-                    err,
-                )
-            finally:
-                self._notification_handles.pop(var_name, None)
-                self._notification_callbacks.pop(var_name, None)
+        with self._plc_lock:
+            for var_name, handles in list(self._notification_handles.items()):
+                try:
+                    self.plc.del_device_notification(*handles)
+                except Exception as err:  # noqa: BLE001 - Isolate subscription failures per variable.
+                    _LOGGER.warning(
+                        "PLC '%s': async-tilauksen vapautus epäonnistui "
+                        "muuttujalle '%s': %s",
+                        self.plc_name,
+                        var_name,
+                        err,
+                    )
+                finally:
+                    self._notification_handles.pop(var_name, None)
+                    self._notification_callbacks.pop(var_name, None)
 
     def _register_poll_fallback(self, point: dict[str, str]) -> None:
         """Lisää muuttuja pollattavaksi, jos async-tilaus epäonnistui."""
@@ -275,27 +283,28 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
 
     def _read_polled_variables(self) -> dict[str, Any]:
         """Synkroninen polling-luku executor-säikeessä."""
-        data: dict[str, Any] = dict(self.data or {})
-        for point in self.poll_read_points:
-            var_name: str = point["name"]
-            var_type: str = point["type"]
-            try:
-                value = self.plc.read_by_name(var_name, ads_type(var_type))
-                data[var_name] = value
-            except pyads.ADSError as err:
-                _LOGGER.warning(
-                    "PLC '%s': muuttujaa '%s' ei voitu lukea: %s",
-                    self.plc_name,
-                    var_name,
-                    err,
-                )
-                if self.data and var_name in self.data:
-                    data[var_name] = self.data[var_name]
-                else:
-                    data[var_name] = None
+        with self._plc_lock:
+            data: dict[str, Any] = dict(self.data or {})
+            for point in self.poll_read_points:
+                var_name: str = point["name"]
+                var_type: str = point["type"]
+                try:
+                    value = self.plc.read_by_name(var_name, ads_type(var_type))
+                    data[var_name] = value
+                except pyads.ADSError as err:
+                    _LOGGER.warning(
+                        "PLC '%s': muuttujaa '%s' ei voitu lukea: %s",
+                        self.plc_name,
+                        var_name,
+                        err,
+                    )
+                    if self.data and var_name in self.data:
+                        data[var_name] = self.data[var_name]
+                    else:
+                        data[var_name] = None
 
-        data.update(self._async_values)
-        return data
+            data.update(self._async_values)
+            return data
 
     @staticmethod
     def _build_read_points(
@@ -365,4 +374,11 @@ class AdsPlcCoordinator(DataUpdateCoordinator):
 
     def write_variable(self, var_name: str, var_type: str, value: Any) -> None:
         """Kirjoita arvo PLC:lle executor-säikeessä."""
-        self.plc.write_by_name(var_name, value, ads_type(var_type))
+        with self._plc_lock:
+            self.plc.write_by_name(var_name, value, ads_type(var_type))
+
+    def close_connection(self) -> None:
+        """Release subscriptions and close after pending ADS work finishes."""
+        with self._plc_lock:
+            self._release_notifications()
+            self.plc.close()

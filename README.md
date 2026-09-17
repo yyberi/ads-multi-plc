@@ -6,6 +6,8 @@ Each PLC is added as its own config entry and appears as a separate device with 
 ## Features
 
 - Multi-PLC support (one config entry per PLC)
+- ADS operations are serialized per connection, including reads, writes, notification
+  subscriptions, and shutdown. Different PLC connections can operate concurrently.
 - Variable-based entities:
   - `sensor`
   - `binary_sensor`
@@ -41,6 +43,12 @@ scripts/develop
 `scripts/setup` creates `.venv` and installs the development requirements.
 `scripts/develop` starts Home Assistant with this repository's `custom_components` directory on `PYTHONPATH`.
 If `python3` points to an older Python, run setup with `PYTHON_BIN=python3.13 scripts/setup`.
+
+Run the connection concurrency regression tests with:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
 
 ### Testing the locally built pyads 3.6.0 wheel
 
